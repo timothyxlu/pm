@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "pm": {
+      "type": "http",
+      "url": "https://pm.timothyxlu.xyz/mcp",
+      "headers": { "Authorization": "Bearer ${PM_TOKEN}" }
+    }
+  }
+}
