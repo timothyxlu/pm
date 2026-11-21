@@ -61,9 +61,11 @@ Object.entries({
   code_challenge_method: 'S256',
   resource: `${BASE}/mcp`,
 }).forEach(([k, v]) => authUrl.searchParams.set(k, v));
-const consent = await fetch(authUrl, { redirect: 'manual' });
+const zh = await (await fetch(authUrl, { headers: { 'Accept-Language': 'zh-CN,zh;q=0.9' } })).text();
+if (!zh.includes('允许') || !zh.includes('lang="zh-CN"')) fail('consent page should be Chinese for zh browsers');
+const consent = await fetch(authUrl, { redirect: 'manual', headers: { 'Accept-Language': 'en-US,en;q=0.9' } });
 const html = await consent.text();
-if (consent.status !== 200 || !html.includes('Smoke Test')) fail(`consent page ${consent.status}: ${html.slice(0, 300)}`);
+if (consent.status !== 200 || !html.includes('Smoke Test') || !html.includes('>Allow<')) fail(`consent page ${consent.status}: ${html.slice(0, 300)}`);
 const handle = /name="handle" value="([^"]+)"/.exec(html)?.[1];
 if (!handle) fail('no consent handle');
 const cookies = consent.headers.getSetCookie().map((c) => c.split(';')[0]).join('; ');

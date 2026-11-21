@@ -24,11 +24,19 @@ curl -sf "${H[@]}" -X POST "$BASE/api/v1/issues/$id1/github" -d '{"url":"https:/
 detail=$(curl -sf "${H[@]}" "$BASE/api/v1/issues/$id1")
 [ "$(echo "$detail" | j .github.length)" = 1 ] || fail "github link missing"
 [ "$(echo "$detail" | j .children.length)" = 1 ] || fail "child missing"
+[ "$(curl -sf "${H[@]}" "$BASE/api/v1/issues/$id2" | j .parent.identifier)" = "$id1" ] || fail "parent missing"
+id3=$(curl -sf "${H[@]}" -X POST "$BASE/api/v1/issues" -d "{\"project\":\"$KEY\",\"title\":\"Grandchild\",\"parent\":\"$id2\"}" | j .identifier)
+code=$(curl -s -o /dev/null -w '%{http_code}' "${H[@]}" -X PATCH "$BASE/api/v1/issues/$id1" -d "{\"parent\":\"$id3\"}")
+[ "$code" = 400 ] || fail "parent cycle should be refused, got $code"
+[ "$(curl -sf "${H[@]}" "$BASE/api/v1/issues?parent=$id1" | j .issues.length)" = 1 ] || fail "parent filter"
+[ "$(curl -sf "${H[@]}" "$BASE/api/v1/issues?project=$KEY&status=done" | j .issues[0].sub_issues.total)" = 1 ] || fail "sub_issues count"
+code=$(curl -s -o /dev/null -w '%{http_code}' "${H[@]}" -X PATCH "$BASE/api/v1/issues/$id3" -d '{"parent":null}')
+[ "$code" = 200 ] || fail "clearing parent should work, got $code"
 [ "$(echo "$detail" | j .activity[0].actor)" = claude ] || fail "actor should be claude"
 found=$(curl -sf "${H[@]}" "$BASE/api/v1/issues?q=rss&project=$KEY" | j .issues.length)
 [ "$found" = 1 ] || fail "search found $found"
 prog=$(curl -sf "${H[@]}" "$BASE/api/v1/projects/$KEY" | j .progress)
-[ "$prog" = 0.5 ] || fail "progress $prog"
+[ "$prog" = 0.33 ] || fail "progress $prog"
 code=$(curl -s -o /dev/null -w '%{http_code}' "${H[@]}" "$BASE/api/v1/tokens")
 [ "$code" = 403 ] || fail "tokens must be refused for token auth, got $code"
 

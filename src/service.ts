@@ -40,6 +40,8 @@ export const listIssuesInput = z.object({
   status: z.array(z.enum(STATUSES)).optional().describe('Defaults to all open statuses (not done/canceled)'),
   label: z.string().optional(),
   priority: z.number().int().min(0).max(4).optional(),
+  parent: z.string().optional().describe('Only sub-issues of this issue (e.g. BLOG-12); all statuses unless status is given'),
+  top_level: z.boolean().optional().describe('Only issues without a parent'),
   query: z.string().optional().describe('Full-text search over identifier, title and description'),
   limit: z.number().int().min(1).max(200).optional(),
   offset: z.number().int().min(0).optional(),
@@ -205,7 +207,16 @@ export async function listIssues(db: D1Database, input: ListIssuesInput) {
     where.push('p.key = ?');
     binds.push(input.project.toUpperCase());
   }
-  const statuses = input.status?.length ? input.status : input.query ? [...STATUSES] : OPEN_STATUSES;
+  if (input.parent) {
+    where.push('i.parent_id = (SELECT id FROM issues WHERE identifier = ?)');
+    binds.push(input.parent.toUpperCase());
+  }
+  if (input.top_level) where.push('i.parent_id IS NULL');
+  const statuses = input.status?.length
+    ? input.status
+    : input.query || input.parent
+      ? [...STATUSES]
+      : OPEN_STATUSES;
   where.push(`i.status IN (${statuses.map(() => '?').join(',')})`);
   binds.push(...statuses);
   if (input.priority !== undefined) {
@@ -227,7 +238,10 @@ export async function listIssues(db: D1Database, input: ListIssuesInput) {
   const { results } = await db
     .prepare(
       `SELECT i.*, p.key AS project_key,
-         (SELECT group_concat(l.name, ',') FROM issue_labels il JOIN labels l ON l.id = il.label_id WHERE il.issue_id = i.id) AS label_names
+         (SELECT group_concat(l.name, ',') FROM issue_labels il JOIN labels l ON l.id = il.label_id WHERE il.issue_id = i.id) AS label_names,
+         (SELECT identifier FROM issues pi WHERE pi.id = i.parent_id) AS parent_identifier,
+         (SELECT COUNT(*) FROM issues c WHERE c.parent_id = i.id AND c.deleted_at IS NULL AND c.status != 'canceled') AS n_children,
+         (SELECT COUNT(*) FROM issues c WHERE c.parent_id = i.id AND c.deleted_at IS NULL AND c.status = 'done') AS n_children_done
        FROM issues i JOIN projects p ON p.id = i.project_id
        WHERE ${where.join(' AND ')}
        ORDER BY CASE i.status WHEN 'in_progress' THEN 0 WHEN 'in_review' THEN 1 WHEN 'todo' THEN 2 WHEN 'backlog' THEN 3 ELSE 4 END,
@@ -235,7 +249,7 @@ export async function listIssues(db: D1Database, input: ListIssuesInput) {
        LIMIT ? OFFSET ?`,
     )
     .bind(...binds, limit + 1, offset)
-    .all<IssueRow & { project_key: string; label_names: string | null }>();
+    .all<SummaryRow>();
   const hasMore = results.length > limit;
   return {
     issues: results.slice(0, limit).map(presentIssueSummary),
@@ -254,7 +268,15 @@ function ftsQuery(q: string) {
   return terms.map((t) => `"${t}"*`).join(' ');
 }
 
-function presentIssueSummary(r: IssueRow & { project_key: string; label_names?: string | null }) {
+type SummaryRow = IssueRow & {
+  project_key: string;
+  label_names?: string | null;
+  parent_identifier?: string | null;
+  n_children?: number;
+  n_children_done?: number;
+};
+
+function presentIssueSummary(r: SummaryRow) {
   return {
     identifier: r.identifier,
     project: r.project_key,
@@ -262,6 +284,8 @@ function presentIssueSummary(r: IssueRow & { project_key: string; label_names?: 
     status: r.status,
     priority: r.priority,
     labels: r.label_names ? r.label_names.split(',') : [],
+    parent: r.parent_identifier ?? null,
+    sub_issues: r.n_children ? { total: Number(r.n_children), done: Number(r.n_children_done ?? 0) } : null,
     due_date: r.due_date,
     updated_at: r.updated_at,
   };
@@ -402,6 +426,22 @@ export async function saveIssue(db: D1Database, input: IssueInput, actor: Actor)
   set('sort_order', input.sort_order);
   if (parentId !== undefined) {
     if (parentId === row.id) throw new HttpError(400, 'An issue cannot be its own parent');
+    if (parentId) {
+      // Refuse cycles: the new parent must not be this issue or one of its descendants.
+      const cycle = await db
+        .prepare(
+          `WITH RECURSIVE ancestors(id, depth) AS (
+             SELECT parent_id, 1 FROM issues WHERE id = ?
+             UNION ALL
+             SELECT i.parent_id, a.depth + 1 FROM issues i JOIN ancestors a ON i.id = a.id
+             WHERE a.id IS NOT NULL AND a.depth < 50
+           )
+           SELECT 1 AS hit FROM ancestors WHERE id = ? LIMIT 1`,
+        )
+        .bind(parentId, row.id)
+        .first();
+      if (cycle) throw new HttpError(400, `${input.parent} is a sub-issue of ${row.identifier}; that would create a cycle`);
+    }
     set('parent_id', parentId);
   }
   if (input.project) {

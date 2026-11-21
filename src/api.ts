@@ -44,6 +44,8 @@ api.get('/issues', async (c) => {
     project: q.project,
     status,
     label: q.label,
+    parent: q.parent,
+    top_level: q.top_level === '1' ? true : undefined,
     priority: q.priority !== undefined ? Number(q.priority) : undefined,
     query: q.q,
     limit: q.limit ? Number(q.limit) : undefined,
