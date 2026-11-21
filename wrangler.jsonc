@@ -26,9 +26,9 @@
   "vars": {
     "PUBLIC_URL": "https://pm.timothyxlu.xyz",
     // Zero Trust team domain, e.g. "timothyxlu.cloudflareaccess.com"
-    "ACCESS_TEAM_DOMAIN": "",
+    "ACCESS_TEAM_DOMAIN": "polished-cloud-d24f.cloudflareaccess.com",
     // AUD tag of the Access application that covers pm.timothyxlu.xyz
-    "ACCESS_AUD": ""
+    "ACCESS_AUD": "ce670577fb261bfba0c12071cef432bd361b1b59793e4a83f3d655994b50abec"
   },
   "observability": { "enabled": true }
 }
