@@ -16,6 +16,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
+      - run: npm run build
       - name: Smoke test against a local server
         run: |
           printf 'DEV_AUTH_BYPASS=1\nPUBLIC_URL=http://localhost:8787\n' > .dev.vars
@@ -38,6 +39,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npm run build
       - name: Find or create D1 and KV in the token's account
         run: bash scripts/resolve-resources.sh
         env:

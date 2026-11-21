@@ -34,6 +34,11 @@ app.all('/authorize', (c) =>
   handleAuthorize(c.req.raw, c.env as Parameters<typeof handleAuthorize>[1], c.executionCtx as ExecutionContext),
 );
 
+// The PWA's service worker serves the app shell offline, so Cloudflare Access
+// never sees a page load. When the session expires the app navigates here:
+// Access sends the browser to sign in, then this sends it back to the app.
+app.get('/login', (c) => c.redirect('/', 302));
+
 // GitHub webhooks arrive in phase 3.
 app.post('/webhooks/github', (c) => c.json({ error: 'Not implemented yet' }, 501));
 

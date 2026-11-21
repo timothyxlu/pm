@@ -1,6 +1,6 @@
 # pm
 
-Personal project tracker on Cloudflare: one Worker at `pm.timothyxlu.xyz` serving a REST API, an MCP server for Claude, and (phase 2) a Svelte PWA. Data lives in D1; the browser is protected by Cloudflare Access. Claude connects to MCP with OAuth (sign in through Access in the browser) or, where no browser is available, with a static API token.
+Personal project tracker on Cloudflare: one Worker at `pm.timothyxlu.xyz` serving a REST API, an MCP server for Claude, and a Svelte PWA. Data lives in D1; the browser is protected by Cloudflare Access. Claude connects to MCP with OAuth (sign in through Access in the browser) or, where no browser is available, with a static API token.
 
 ## Layout
 
@@ -13,7 +13,9 @@ Personal project tracker on Cloudflare: one Worker at `pm.timothyxlu.xyz` servin
 | `src/auth.ts` | Access JWT verification and Bearer tokens |
 | `src/oauth.ts` | OAuth 2.1 for MCP (`@cloudflare/workers-oauth-provider`): discovery, DCR/CIMD, consent page, tokens in KV |
 | `migrations/` | D1 schema (`wrangler d1 migrations`) |
-| `public/` | Static assets (placeholder until the web app lands) |
+| `web/` | Svelte 5 PWA (Vite). Builds into `public/`, which the Worker serves |
+| `web/src/lib/store.svelte.ts` | Local copy in IndexedDB, kept fresh with `/api/v1/sync` |
+| `web/src/lib/i18n.svelte.ts` | Chinese and English UI strings (user content is never translated) |
 
 ## Local development
 
@@ -21,11 +23,20 @@ Personal project tracker on Cloudflare: one Worker at `pm.timothyxlu.xyz` servin
 npm install
 printf 'DEV_AUTH_BYPASS=1\nPUBLIC_URL=http://localhost:8787\n' > .dev.vars   # local only
 npm run db:migrate:local
+npm run build                             # web app into public/
 npm run dev                               # http://localhost:8787
+npm run dev:web                           # optional: Vite with hot reload on :5173, API proxied to :8787
 npm run token:create -- local --local     # prints a token for the local DB
 TOKEN=pm_... npm run smoke                # end-to-end checks of REST + MCP
 npm run smoke:oauth                       # end-to-end OAuth flow for MCP
 ```
+
+## Web app
+
+- Renders from IndexedDB at once, then pulls changes from `/api/v1/sync` (on load, when the tab becomes visible, and after each change). Search runs on the local copy.
+- Works offline for reading: the service worker caches the app shell. Changes need a connection for now.
+- When the Access session expires, a banner links to `/login`, which Access sends through sign-in and the Worker redirects back to `/`.
+- Language follows the system and can be switched in Settings. Theme likewise.
 
 ## Deploy
 
