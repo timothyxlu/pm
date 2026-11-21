@@ -1,6 +1,6 @@
 # pm
 
-Personal project tracker on Cloudflare: one Worker at `pm.timothyxlu.xyz` serving a REST API, an MCP server for Claude, and (phase 2) a Svelte PWA. Data lives in D1; the browser is protected by Cloudflare Access; Claude Code uses an API token.
+Personal project tracker on Cloudflare: one Worker at `pm.timothyxlu.xyz` serving a REST API, an MCP server for Claude, and (phase 2) a Svelte PWA. Data lives in D1; the browser is protected by Cloudflare Access. Claude connects to MCP with OAuth (sign in through Access in the browser) or, where no browser is available, with a static API token.
 
 ## Layout
 
@@ -11,6 +11,7 @@ Personal project tracker on Cloudflare: one Worker at `pm.timothyxlu.xyz` servin
 | `src/api.ts` | REST API (`/api/v1`) |
 | `src/mcp.ts` | Stateless Streamable HTTP MCP server (`/mcp`) |
 | `src/auth.ts` | Access JWT verification and Bearer tokens |
+| `src/oauth.ts` | OAuth 2.1 for MCP (`@cloudflare/workers-oauth-provider`): discovery, DCR/CIMD, consent page, tokens in KV |
 | `migrations/` | D1 schema (`wrangler d1 migrations`) |
 | `public/` | Static assets (placeholder until the web app lands) |
 
@@ -18,11 +19,12 @@ Personal project tracker on Cloudflare: one Worker at `pm.timothyxlu.xyz` servin
 
 ```sh
 npm install
-echo "DEV_AUTH_BYPASS=1" > .dev.vars      # local only: skips auth when no token is sent
+printf 'DEV_AUTH_BYPASS=1\nPUBLIC_URL=http://localhost:8787\n' > .dev.vars   # local only
 npm run db:migrate:local
 npm run dev                               # http://localhost:8787
 npm run token:create -- local --local     # prints a token for the local DB
 TOKEN=pm_... npm run smoke                # end-to-end checks of REST + MCP
+npm run smoke:oauth                       # end-to-end OAuth flow for MCP
 ```
 
 ## Deploy
@@ -31,15 +33,13 @@ Pushes to `main` run CI, apply D1 migrations and `wrangler deploy` (`.github/wor
 
 Cloudflare Access (Zero Trust → Access → Applications):
 
-1. Self-hosted app for `pm.timothyxlu.xyz`, policy **Allow** your email, login method GitHub. Copy its AUD tag into `ACCESS_AUD` and your team domain into `ACCESS_TEAM_DOMAIN` in `wrangler.jsonc`.
-2. A second app for `pm.timothyxlu.xyz/mcp` and `pm.timothyxlu.xyz/webhooks/*` with policy **Bypass**. The Worker checks tokens and webhook signatures itself.
+1. Self-hosted app for `pm.timothyxlu.xyz`, policy **Allow** your email, login method GitHub. Set its session duration to about a month. Copy its AUD tag into `ACCESS_AUD` and your team domain into `ACCESS_TEAM_DOMAIN` in `wrangler.jsonc`. This app also guards `/authorize`, the OAuth consent page, which is how MCP sign-in proves it is you.
+2. A second app with policy **Bypass** for the machine endpoints, which the Worker authenticates itself: `pm.timothyxlu.xyz/mcp`, `pm.timothyxlu.xyz/oauth/*`, `pm.timothyxlu.xyz/.well-known/*`, `pm.timothyxlu.xyz/webhooks/*`.
 
 ## Using it from Claude Code
 
-Create a token once (`npm run token:create -- "claude-code"`), export it as `PM_TOKEN`, and the committed `.mcp.json` connects Claude Code to `https://pm.timothyxlu.xyz/mcp`. In Claude Code cloud environments, add `PM_TOKEN` as an environment variable and allow `pm.timothyxlu.xyz` in the network settings. To use it from other repos, copy `.mcp.json` there or run:
+**Local (OAuth).** The committed `.mcp.json` points at `https://pm.timothyxlu.xyz/mcp`. In Claude Code run `/mcp`, pick `pm`, and authenticate: a browser opens, Cloudflare Access signs you in, you click Allow on the consent page, and Claude Code keeps the tokens (access 1 hour, refresh 90 days). For other repos: `claude mcp add --transport http pm https://pm.timothyxlu.xyz/mcp`.
 
-```sh
-claude mcp add --transport http pm https://pm.timothyxlu.xyz/mcp --header "Authorization: Bearer $PM_TOKEN"
-```
+**Cloud environments (no browser).** Create a token once (`npm run token:create -- "claude-cloud"`). In the environment settings, allow `pm.timothyxlu.xyz` under network access, and either add the token as a Network secret for that host (the proxy adds the `Authorization` header, so `.mcp.json` needs no change) or add it as `PM_TOKEN` and register the server in the setup script: `claude mcp add --transport http pm https://pm.timothyxlu.xyz/mcp --header "Authorization: Bearer $PM_TOKEN"`. `/mcp` accepts both OAuth tokens and `pm_` tokens.
 
 MCP tools: `list_projects`, `get_project`, `save_project`, `list_issues`, `get_issue`, `save_issue`, `save_comment`, `link_github`, `weekly_summary`, `list_labels`.

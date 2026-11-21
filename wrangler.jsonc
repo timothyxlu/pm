@@ -11,7 +11,7 @@
   "assets": {
     "directory": "./public",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*", "/mcp", "/webhooks/*"]
+    "run_worker_first": ["/api/*", "/mcp", "/webhooks/*", "/authorize", "/oauth/*", "/.well-known/*"]
   },
   "d1_databases": [
     {
@@ -21,7 +21,9 @@
       "migrations_dir": "migrations"
     }
   ],
+  "kv_namespaces": [{ "binding": "OAUTH_KV", "id": "bdd58b9859f6417bb952379e9b92ea4a" }],
   "vars": {
+    "PUBLIC_URL": "https://pm.timothyxlu.xyz",
     // Zero Trust team domain, e.g. "timothyxlu.cloudflareaccess.com"
     "ACCESS_TEAM_DOMAIN": "",
     // AUD tag of the Access application that covers pm.timothyxlu.xyz

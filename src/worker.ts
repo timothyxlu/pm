@@ -1,11 +1,13 @@
 import { Hono } from 'hono';
 import { api } from './api';
 import { authenticate, Principal } from './auth';
-import { handleMcp } from './mcp';
+import { handleAuthorize, oauthProvider } from './oauth';
 import { Actor, Env, HttpError } from './types';
 
 type AppEnv = { Bindings: Env; Variables: { principal: Principal; actor: Actor } };
 
+// Everything except /mcp and the OAuth endpoints (which OAuthProvider owns)
+// lands here.
 const app = new Hono<AppEnv>();
 
 app.onError((err, c) => {
@@ -27,17 +29,20 @@ app.use('/api/*', async (c, next) => {
 
 app.route('/api/v1', api);
 
-app.all('/mcp', async (c) => {
-  const principal = await authenticate(c.req.raw, c.env, c.executionCtx as ExecutionContext);
-  if (!principal) {
-    return c.json({ error: 'Unauthorized' }, 401, { 'WWW-Authenticate': 'Bearer realm="pm"' });
-  }
-  return handleMcp(c.req.raw, c.env);
-});
+// OAuth consent page for MCP clients (behind Cloudflare Access).
+app.all('/authorize', (c) =>
+  handleAuthorize(c.req.raw, c.env as Parameters<typeof handleAuthorize>[1], c.executionCtx as ExecutionContext),
+);
 
 // GitHub webhooks arrive in phase 3.
 app.post('/webhooks/github', (c) => c.json({ error: 'Not implemented yet' }, 501));
 
 app.all('/api/*', (c) => c.json({ error: 'Not found' }, 404));
 
-export default app satisfies ExportedHandler<Env>;
+const defaultHandler: ExportedHandler<Env> = { fetch: (req, env, ctx) => app.fetch(req, env, ctx) };
+
+export default {
+  fetch(request, env, ctx) {
+    return oauthProvider(env, defaultHandler).fetch(request, env, ctx);
+  },
+} satisfies ExportedHandler<Env>;

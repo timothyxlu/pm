@@ -1,5 +1,9 @@
 export interface Env {
   DB: D1Database;
+  /** Storage for OAuth clients, grants and tokens (hashed). */
+  OAUTH_KV: KVNamespace;
+  /** Public origin, e.g. https://pm.timothyxlu.xyz (http://localhost:8787 in dev). */
+  PUBLIC_URL: string;
   ASSETS: Fetcher;
   /** Zero Trust team domain, e.g. "timothyxlu.cloudflareaccess.com". */
   ACCESS_TEAM_DOMAIN: string;
