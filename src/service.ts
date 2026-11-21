@@ -579,8 +579,10 @@ export async function sync(db: D1Database, since?: string) {
   ]);
   return {
     server_time: now(),
-    projects: projects.results.map(presentProject),
+    projects: projects.results.map((p) => ({ ...presentProject(p), next_number: p.next_number })),
     issues: issues.results.map((r) => ({
+      id: r.id,
+      number: r.number,
       ...presentIssueSummary(r),
       description: r.description,
       parent_id: r.parent_id,
