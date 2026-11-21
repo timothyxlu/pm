@@ -1,0 +1,33 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "pm",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-11-01",
+  "compatibility_flags": ["nodejs_compat"],
+  // The *.workers.dev URL would skip Cloudflare Access, so keep it off.
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [{ "pattern": "pm.timothyxlu.xyz", "custom_domain": true }],
+  "assets": {
+    "directory": "./public",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/mcp", "/webhooks/*", "/authorize", "/oauth/*", "/.well-known/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "pm",
+      "database_id": "183511bd-64ae-481f-ab1a-270466c92a6c",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "kv_namespaces": [{ "binding": "OAUTH_KV", "id": "bdd58b9859f6417bb952379e9b92ea4a" }],
+  "vars": {
+    "PUBLIC_URL": "https://pm.timothyxlu.xyz",
+    // Zero Trust team domain, e.g. "timothyxlu.cloudflareaccess.com"
+    "ACCESS_TEAM_DOMAIN": "",
+    // AUD tag of the Access application that covers pm.timothyxlu.xyz
+    "ACCESS_AUD": ""
+  },
+  "observability": { "enabled": true }
+}

@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "pm": {
+      "type": "http",
+      "url": "https://pm.timothyxlu.xyz/mcp"
+    }
+  }
+}
