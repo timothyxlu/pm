@@ -50,6 +50,15 @@ Cloudflare Access (Zero Trust → Access → Applications):
 1. Self-hosted app for `pm.timothyxlu.xyz`, policy **Allow** your email, login method GitHub. Set its session duration to about a month. Copy its AUD tag into `ACCESS_AUD` and your team domain into `ACCESS_TEAM_DOMAIN` in `wrangler.jsonc`. This app also guards `/authorize`, the OAuth consent page, which is how MCP sign-in proves it is you.
 2. A second app with policy **Bypass** for the machine endpoints, which the Worker authenticates itself: `pm.timothyxlu.xyz/mcp`, `pm.timothyxlu.xyz/oauth/*`, `pm.timothyxlu.xyz/.well-known/*`, `pm.timothyxlu.xyz/webhooks/*`.
 
+## Importing from Linear
+
+Issues keep their Linear identifiers (e.g. `DEV-42`), timestamps, status, priority, labels, due dates, parent/child links and comments; new issues in the project continue after the highest imported number. Re-running is safe.
+
+- Whole project: add a Linear personal API key as the `LINEAR_API_KEY` repository secret, then run the **Import from Linear** workflow from the Actions tab (dry run first). Locally: `LINEAR_API_KEY=... node scripts/import-linear.mjs --project "sigion.ai" --key DEV --remote`.
+- A few issues: the `import_issues` MCP tool takes up to 50 issues per call.
+
+Images uploaded to Linear stay on Linear's servers, so they need a Linear login to view.
+
 ## Using it from Claude Code
 
 **Local (OAuth).** The committed `.mcp.json` points at `https://pm.timothyxlu.xyz/mcp`. In Claude Code run `/mcp`, pick `pm`, and authenticate: a browser opens, Cloudflare Access signs you in, you click Allow on the consent page, and Claude Code keeps the tokens (access 1 hour, refresh 90 days). For other repos: `claude mcp add --transport http pm https://pm.timothyxlu.xyz/mcp`.

@@ -103,6 +103,7 @@ const zh = {
     updated: '更新了',
     commented: '评论了',
     linked_github: '关联了',
+    imported: '从 Linear 导入了这个 issue',
     deleted: '删除了这个 issue',
   } as Record<string, string>,
   fields: {
@@ -265,6 +266,7 @@ const en: Strings = {
     updated: 'changed',
     commented: 'commented',
     linked_github: 'linked',
+    imported: 'imported this issue from Linear',
     deleted: 'deleted this issue',
   },
   fields: {

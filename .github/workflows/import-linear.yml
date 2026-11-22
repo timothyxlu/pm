@@ -1,0 +1,42 @@
+name: Import from Linear
+
+# Run by hand from the Actions tab. Needs the LINEAR_API_KEY repository secret
+# (a Linear personal API key; read access is enough).
+on:
+  workflow_dispatch:
+    inputs:
+      project:
+        description: Linear project name
+        required: true
+      key:
+        description: pm project key (issues keep their Linear identifiers)
+        required: true
+      dry_run:
+        description: Only fetch and print counts
+        type: boolean
+        default: true
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    concurrency: deploy
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Find D1 and KV in the token's account
+        run: bash scripts/resolve-resources.sh
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Import
+        run: node scripts/import-linear.mjs --project "$PROJECT" --key "$KEY" --remote $([ "$DRY_RUN" = true ] && echo --dry-run)
+        env:
+          PROJECT: ${{ inputs.project }}
+          KEY: ${{ inputs.key }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
