@@ -160,7 +160,6 @@
 <ProjectForm bind:open={creating} />
 
 <style>
-<<<<<<< HEAD
   .mstats {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -262,8 +261,6 @@
   .more {
     margin-top: 4px;
   }
-=======
->>>>>>> b137850d6d247c60445b7fe0e132794d79b1a6b7
   .today {
     font-size: 13px;
     color: var(--faint);

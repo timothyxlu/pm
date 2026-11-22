@@ -143,11 +143,8 @@ const zh = {
   syncingNow: '同步中…',
   switchTheme: '切换深浅色',
   createMore: '继续创建下一个',
-<<<<<<< HEAD
   createdAs: (id: string) => `已创建 ${id}`,
   recent: '最近更新',
-=======
->>>>>>> b137850d6d247c60445b7fe0e132794d79b1a6b7
   keyHelp: [
     ['⌘K', '搜索或跳转'],
     ['/', '搜索或跳转'],
@@ -308,11 +305,8 @@ const en: Strings = {
   syncingNow: 'Syncing…',
   switchTheme: 'Toggle light/dark',
   createMore: 'Create another',
-<<<<<<< HEAD
   createdAs: (id) => `Created ${id}`,
   recent: 'Recently updated',
-=======
->>>>>>> b137850d6d247c60445b7fe0e132794d79b1a6b7
   keyHelp: [
     ['⌘K', 'Search or jump to'],
     ['/', 'Search or jump to'],
