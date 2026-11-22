@@ -8,7 +8,7 @@ export type Route =
   | { name: 'settings' }
   | { name: 'project'; key: string }
   | { name: 'issue'; id: string }
-  | { name: 'new'; project?: string; parent?: string }
+  | { name: 'new'; project?: string; parent?: string; status?: string }
   | { name: 'notfound' };
 
 function parse(url: URL): Route {
@@ -25,6 +25,7 @@ function parse(url: URL): Route {
       name: 'new',
       project: url.searchParams.get('project') ?? undefined,
       parent: url.searchParams.get('parent') ?? undefined,
+      status: url.searchParams.get('status') ?? undefined,
     };
   return { name: 'notfound' };
 }
