@@ -14,6 +14,9 @@
   let description = $state('');
   let status = $state<Project['status']>('active');
   let repos = $state('');
+  // Repos the GitHub App can see. null: not loaded or not connected → free text.
+  let installed = $state<string[] | null>(null);
+  let picked = $state<string[]>([]);
   let error = $state('');
   let busy = $state(false);
 
@@ -24,8 +27,19 @@
     description = project?.description ?? '';
     status = project?.status ?? 'active';
     repos = project?.github_repos.join('\n') ?? '';
+    picked = [...(project?.github_repos ?? [])];
     error = '';
+    api
+      .githubRepos()
+      .then((r) => (installed = r.repos.length ? r.repos.map((x) => x.full_name) : null))
+      .catch(() => (installed = null));
   });
+
+  // Installed repos first, then any bound repo the app can't see (kept so it isn't lost).
+  const choices = $derived(installed ? [...installed, ...picked.filter((r) => !installed!.includes(r))] : []);
+  function toggle(r: string) {
+    picked = picked.includes(r) ? picked.filter((x) => x !== r) : [...picked, r];
+  }
 
   async function submit(e: SubmitEvent) {
     e.preventDefault();
@@ -35,10 +49,12 @@
       name: name.trim(),
       description: description.trim() || null,
       status,
-      github_repos: repos
-        .split(/[\n,]/)
-        .map((r) => r.trim())
-        .filter(Boolean),
+      github_repos: installed
+        ? picked
+        : repos
+            .split(/[\n,]/)
+            .map((r) => r.trim())
+            .filter(Boolean),
     };
     try {
       if (project) await api.updateProject(project.key, input);
@@ -91,11 +107,25 @@
         </div>
       </div>
     {/if}
-    <div class="field">
-      <label for="prepos">{t.githubRepos}</label>
-      <textarea id="prepos" class="input mono" rows="2" bind:value={repos} autocapitalize="off" spellcheck="false"></textarea>
-      <span class="hint">{t.githubReposHint}</span>
-    </div>
+    {#if installed}
+      <fieldset class="field">
+        <legend class="label">{t.githubRepos}</legend>
+        <div class="repos">
+          {#each choices as r (r)}
+            <label class="repo">
+              <input type="checkbox" checked={picked.includes(r)} onchange={() => toggle(r)} />
+              <span class="mono">{r}</span>
+            </label>
+          {/each}
+        </div>
+      </fieldset>
+    {:else}
+      <div class="field">
+        <label for="prepos">{t.githubRepos}</label>
+        <textarea id="prepos" class="input mono" rows="2" bind:value={repos} autocapitalize="off" spellcheck="false"></textarea>
+        <span class="hint">{t.githubReposHint}</span>
+      </div>
+    {/if}
     {#if error}<p class="error">{error}</p>{/if}
     <div class="actions">
       <button type="button" class="btn" onclick={() => (open = false)}>{t.cancel}</button>
@@ -105,6 +135,39 @@
 </Sheet>
 
 <style>
+  fieldset {
+    border: 0;
+    margin-inline: 0;
+    padding: 0;
+    min-width: 0;
+  }
+  legend {
+    padding: 0;
+  }
+  .repos {
+    max-height: 220px;
+    overflow-y: auto;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--surface);
+  }
+  .repo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
+    padding: 0 12px;
+    font-size: 14px;
+  }
+  .repo + .repo {
+    border-top: 1px solid var(--line);
+  }
+  .repo input {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    accent-color: var(--accent);
+  }
   .actions {
     display: flex;
     gap: 10px;
