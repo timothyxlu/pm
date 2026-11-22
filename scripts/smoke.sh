@@ -45,9 +45,15 @@ M=(-H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -H 'Acc
 init=$(curl -sf "${M[@]}" -X POST "$BASE/mcp" -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"smoke","version":"0"}}}')
 [ "$(echo "$init" | j .result.serverInfo.name)" = pm ] || fail "mcp initialize: $init"
 tools=$(curl -sf "${M[@]}" -X POST "$BASE/mcp" -d '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | j .result.tools.length)
-[ "$tools" = 10 ] || fail "expected 10 tools, got $tools"
+[ "$tools" = 11 ] || fail "expected 11 tools, got $tools"
 call=$(curl -sf "${M[@]}" -X POST "$BASE/mcp" -d "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"save_issue\",\"arguments\":{\"identifier\":\"$id2\",\"status\":\"in_progress\"}}}")
 echo "$call" | j .result.content[0].text | grep -q '"in_progress"' || fail "mcp save_issue: $call"
+imp=$(curl -sf "${M[@]}" -X POST "$BASE/mcp" -d "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"import_issues\",\"arguments\":{\"project\":\"$KEY\",\"issues\":[{\"identifier\":\"$KEY-91\",\"title\":\"Imported child\",\"status\":\"done\",\"parent\":\"$KEY-90\",\"created_at\":\"2026-01-01T00:00:00Z\",\"comments\":[{\"source_id\":\"smoke-1\",\"body\":\"old\",\"created_at\":\"2026-01-02T00:00:00Z\"}]},{\"identifier\":\"$KEY-90\",\"title\":\"Imported parent\",\"status\":\"todo\",\"created_at\":\"2026-01-01T00:00:00Z\"}]}}}")
+echo "$imp" | j .result.content[0].text | grep -q '"created": 2' || fail "mcp import_issues: $imp"
+[ "$(curl -sf "${H[@]}" "$BASE/api/v1/issues/$KEY-91" | j .parent.identifier)" = "$KEY-90" ] || fail "imported parent"
+[ "$(curl -sf "${H[@]}" "$BASE/api/v1/issues/$KEY-91" | j .created_at)" = "2026-01-01T00:00:00Z" ] || fail "imported created_at"
+nxt=$(curl -sf "${H[@]}" -X POST "$BASE/api/v1/issues" -d "{\"project\":\"$KEY\",\"title\":\"After import\"}" | j .identifier)
+[ "$nxt" = "$KEY-92" ] || fail "next identifier after import: $nxt"
 code=$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -X POST "$BASE/mcp" -H 'Authorization: Bearer pm_wrong' -d '{}')
 [ "$code" = 401 ] || fail "mcp bad token should be 401"
 
