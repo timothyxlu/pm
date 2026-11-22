@@ -200,6 +200,7 @@
 <ProjectForm bind:open={editing} {project} />
 
 <style>
+<<<<<<< HEAD
   .mtop {
     position: sticky;
     top: 0;
@@ -276,6 +277,8 @@
     font-size: 13px;
     font-weight: 600;
   }
+=======
+>>>>>>> b137850d6d247c60445b7fe0e132794d79b1a6b7
   .crumb {
     color: var(--muted);
     font-weight: 500;
@@ -402,6 +405,7 @@
     border-color: var(--line-strong);
   }
   .dcard :global(.row) {
+<<<<<<< HEAD
     min-height: 0;
   }
   .dcard :global(.st) {
@@ -417,6 +421,18 @@
   .dcard :global(.meta) {
     flex-wrap: wrap;
     row-gap: 4px;
+=======
+    font-size: 13.5px;
+    padding: 10px 12px;
+  }
+  .dcard :global(.body) {
+    flex-direction: column-reverse;
+    gap: 6px;
+  }
+  .dcard :global(.title) {
+    font-weight: 500;
+    font-size: 13.5px !important;
+>>>>>>> b137850d6d247c60445b7fe0e132794d79b1a6b7
   }
   h1 {
     display: flex;

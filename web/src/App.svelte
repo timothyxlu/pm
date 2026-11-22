@@ -2,7 +2,10 @@
   import Banner from './components/Banner.svelte';
   import BottomNav from './components/BottomNav.svelte';
   import Palette from './components/Palette.svelte';
+<<<<<<< HEAD
   import QuickStatus from './components/QuickStatus.svelte';
+=======
+>>>>>>> b137850d6d247c60445b7fe0e132794d79b1a6b7
   import ShortcutHelp from './components/ShortcutHelp.svelte';
   import Sidebar from './components/Sidebar.svelte';
   import { keys } from './lib/keys.svelte';
@@ -59,5 +62,8 @@
 </div>
 
 <Palette />
+<<<<<<< HEAD
 <QuickStatus />
+=======
+>>>>>>> b137850d6d247c60445b7fe0e132794d79b1a6b7
 <ShortcutHelp />

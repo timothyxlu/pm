@@ -128,16 +128,24 @@
       <footer class="dfoot">
         {#if nextId}<span class="hint">{t.willCreateAs(nextId)}</span>{/if}
         {#if !activeProjects.length && store.loaded}<span class="hint">{t.noProjects}</span>{/if}
+<<<<<<< HEAD
         {#if createdId}<span class="hint ok"><Icon name="check" size={14} />{t.createdAs(createdId)}</span>{/if}
         <span class="spacer"></span>
         <label class="moremode"><input type="checkbox" bind:checked={more} />{t.createMore}</label>
+=======
+        <span class="spacer"></span>
+>>>>>>> b137850d6d247c60445b7fe0e132794d79b1a6b7
         <button type="button" class="btn" onclick={close}>{t.cancel}</button>
         <button type="submit" class="btn primary" disabled={busy || !title.trim() || !project}>{t.create} <kbd>⌘↵</kbd></button>
       </footer>
     </form>
   </dialog>
 {:else}
+<<<<<<< HEAD
 <form class="page plain mnew" onsubmit={submit} aria-label={t.newIssue}>
+=======
+<form class="page plain" onsubmit={submit} aria-label={t.newIssue}>
+>>>>>>> b137850d6d247c60445b7fe0e132794d79b1a6b7
   <header class="bar">
     <button type="button" class="text-btn" onclick={close}>{t.cancel}</button>
     <h1>{t.newIssue}{#if nextId}<span class="nid mono">{nextId}</span>{/if}</h1>
@@ -153,6 +161,7 @@
     </div>
   {/if}
 
+<<<<<<< HEAD
   <textarea
     class="mtitle"
     rows="1"
@@ -179,6 +188,23 @@
         </button>
       {/snippet}
     </IssueFields>
+=======
+  <div class="field">
+    <label for="title">{t.title}</label>
+    <input
+      id="title"
+      class="input big"
+      bind:value={title}
+      required
+      autocomplete="off"
+      enterkeyhint="done"
+      {@attach (el) => el.focus()}
+    />
+  </div>
+  <div class="field">
+    <label for="desc">{t.descriptionHint}</label>
+    <textarea id="desc" class="input" rows="5" bind:value={description} placeholder={t.descriptionPlaceholder} onkeydown={cmdEnter}></textarea>
+>>>>>>> b137850d6d247c60445b7fe0e132794d79b1a6b7
   </div>
 
   <textarea class="mdesc" rows="6" bind:value={description} placeholder={t.descriptionHint} aria-label={t.description} onkeydown={cmdEnter}></textarea>
@@ -204,6 +230,7 @@
 </Sheet>
 
 <style>
+<<<<<<< HEAD
   .mnew .bar {
     position: sticky;
     top: 0;
@@ -290,6 +317,8 @@
     gap: 4px;
     color: var(--st-in_review);
   }
+=======
+>>>>>>> b137850d6d247c60445b7fe0e132794d79b1a6b7
   .newdlg {
     margin: 10vh auto auto;
     padding: 0;

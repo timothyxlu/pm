@@ -18,11 +18,26 @@
   const closed = $derived(issue.status === 'done' || issue.status === 'canceled');
 </script>
 
+<<<<<<< HEAD
 <div class="row" class:closed>
   <button class="st" onclick={() => (quick.issue = issue)} aria-label={`${t.status}: ${t.statuses[issue.status]}`}>
     <StatusIcon status={issue.status} size={18} />
   </button>
   <a class="body" href={`/i/${issue.identifier}`} data-row>
+=======
+<a class="row" href={`/i/${issue.identifier}`} data-row>
+  <StatusIcon status={issue.status} />
+  <div class="body">
+    <div class="meta">
+      <span class="id mono">{issue.identifier}</span>
+      {#if issue.priority === 1}<span class="tag urgent">{t.priorities[1]}</span>{/if}
+      {#if issue.priority === 2}<span class="tag high">{t.priorities[2]}</span>{/if}
+      {#if parent}<span class="tag">↳ {parent.identifier}</span>{/if}
+      {#if sub}<span class="tag">{t.subCount(sub.done, sub.total)}</span>{/if}
+      {#if issue.due_date}<span class="tag" class:urgent={overdue}>{t.due(fmtDay(issue.due_date))}</span>{/if}
+      {#each issue.labels.slice(0, 2) as l}<span class="tag">{l}</span>{/each}
+    </div>
+>>>>>>> b137850d6d247c60445b7fe0e132794d79b1a6b7
     <span class="title">{issue.title}</span>
     <span class="meta">
       {#if issue.priority !== 0}<PriorityIcon priority={issue.priority} size={12} />{/if}

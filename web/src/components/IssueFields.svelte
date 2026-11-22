@@ -17,11 +17,16 @@
     due_date,
     onchange,
     vertical = false,
+<<<<<<< HEAD
     lead,
   }: {
     vertical?: boolean;
     /** Extra chip shown first in the chip bar (the new-issue page puts the project there). */
     lead?: Snippet;
+=======
+  }: {
+    vertical?: boolean;
+>>>>>>> b137850d6d247c60445b7fe0e132794d79b1a6b7
     status: Status;
     priority: number;
     labels: string[];
@@ -235,7 +240,10 @@
     background: var(--accent);
     opacity: 0.7;
   }
+<<<<<<< HEAD
   /* One row that scrolls sideways on phones, instead of wrapping into a pile. */
+=======
+>>>>>>> b137850d6d247c60445b7fe0e132794d79b1a6b7
   .chips {
     display: flex;
     gap: 8px;
