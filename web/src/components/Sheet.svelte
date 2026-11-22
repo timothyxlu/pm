@@ -8,6 +8,26 @@
   }: { open: boolean; title?: string; onclose?: () => void; children: Snippet } = $props();
   let dialog: HTMLDialogElement | undefined = $state();
 
+  // Drag the handle down to dismiss, like a native bottom sheet.
+  let startY = 0;
+  let dy = $state(0);
+  let dragging = $state(false);
+  function down(e: PointerEvent) {
+    if (e.pointerType === 'mouse') return;
+    startY = e.clientY;
+    dragging = true;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }
+  function move(e: PointerEvent) {
+    if (dragging) dy = Math.max(0, e.clientY - startY);
+  }
+  function up() {
+    if (!dragging) return;
+    dragging = false;
+    if (dy > 80) dialog?.close();
+    dy = 0;
+  }
+
   $effect(() => {
     if (!dialog) return;
     if (open && !dialog.open) dialog.showModal();
@@ -25,9 +45,11 @@
     if (e.target === dialog) dialog.close();
   }}
 >
-  <div class="sheet">
-    <div class="grip" aria-hidden="true"></div>
-    {#if title}<h2>{title}</h2>{/if}
+  <div class="sheet" style:transform={dy ? `translateY(${dy}px)` : undefined} class:dragging>
+    <div class="handle" onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up} role="presentation">
+      <div class="grip" aria-hidden="true"></div>
+      {#if title}<h2>{title}</h2>{/if}
+    </div>
     {@render children()}
   </div>
 </dialog>
@@ -64,6 +86,16 @@
     padding: 8px 16px calc(16px + var(--safe-b));
     max-height: 85dvh;
     overflow-y: auto;
+  }
+  .sheet {
+    transition: transform 0.18s ease-out;
+  }
+  .sheet.dragging {
+    transition: none;
+  }
+  .handle {
+    touch-action: none;
+    padding-top: 2px;
   }
   .grip {
     width: 36px;
@@ -105,5 +137,8 @@
     margin: 4px 0 8px;
     color: var(--muted);
     font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 </style>

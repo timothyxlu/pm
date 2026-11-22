@@ -125,7 +125,7 @@
 </div>
 {:else}
 <div class="page">
-  <header class="topbar">
+  <header class="topbar mtop">
     <button class="icon-btn" onclick={() => router.back('/')} aria-label={t.back}><Icon name="back" /></button>
     <h1>
       {project?.name ?? key}
@@ -150,35 +150,35 @@
   </div>
 
   {#if view === 'list'}
-    {#each groups as g (g.status)}
-      {#if g.issues.length}
-        {#if isOpen(g.status)}
-          {@const max = limit[g.status] ?? PAGE}
-          <h2 class="section-title group">
-            <StatusIcon status={g.status} size={14} />
-            {t.statuses[g.status]} · {g.issues.length}
-            {#if expanded[g.status] !== undefined}
-              <button class="mini" onclick={() => (expanded[g.status] = false)}>{t.hide}</button>
-            {/if}
-          </h2>
-          <div class="list">
-            {#each g.issues.slice(0, max) as issue (issue.id)}
-              <IssueRow {issue} />
-            {/each}
-          </div>
-          {#if g.issues.length > max}
-            <button class="more" onclick={() => (limit[g.status] = max + 50)}>{t.showMore(g.issues.length - max)}</button>
-          {/if}
-        {:else}
-          <button class="more collapsed" onclick={() => (expanded[g.status] = true)}>
-            <StatusIcon status={g.status} size={14} />
-            {t.showStatus(t.statuses[g.status], g.issues.length)}
-          </button>
-        {/if}
-      {/if}
-    {/each}
     {#if c.total === 0 && c.counts.canceled === 0}
       <p class="empty">{t.noneYet}</p>
+    {:else}
+      <div class="mlist">
+        {#each groups as g (g.status)}
+          {#if g.issues.length}
+            {@const max = limit[g.status] ?? PAGE}
+            <section class="mg">
+            <div class="mgroup">
+              <button class="mfold" aria-expanded={isOpen(g.status)} onclick={() => (expanded[g.status] = !isOpen(g.status))}>
+                <span class="chev" class:closed={!isOpen(g.status)}><Icon name="chevron" size={14} /></span>
+                <StatusIcon status={g.status} size={14} />
+                {t.statuses[g.status]}
+                <span class="n">{g.issues.length}</span>
+              </button>
+              <a class="madd" href={`/new?project=${key}`} aria-label={t.newIssue}><Icon name="plus" size={18} /></a>
+            </div>
+            {#if isOpen(g.status)}
+              {#each g.issues.slice(0, max) as issue (issue.id)}
+                <IssueRow {issue} />
+              {/each}
+              {#if g.issues.length > max}
+                <button class="mmore" onclick={() => (limit[g.status] = max + 50)}>{t.showMore(g.issues.length - max)}</button>
+              {/if}
+            {/if}
+            </section>
+          {/if}
+        {/each}
+      </div>
     {/if}
   {:else}
     <div class="board">
@@ -200,6 +200,82 @@
 <ProjectForm bind:open={editing} {project} />
 
 <style>
+  .mtop {
+    position: sticky;
+    top: 0;
+    z-index: 6;
+    background: var(--bg);
+    padding-top: var(--safe-t);
+    margin-top: calc(-8px - var(--safe-t));
+  }
+  .mlist {
+    margin-top: 12px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    overflow: clip;
+  }
+  .mg > :global(.row) {
+    border-top: 1px solid var(--line);
+  }
+  .mg + .mg {
+    border-top: 1px solid var(--line);
+  }
+  .mgroup {
+    position: sticky;
+    top: calc(52px + var(--safe-t));
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    background: var(--surface-2);
+  }
+  .mfold {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+    padding: 0 14px 0 12px;
+    border: 0;
+    background: transparent;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink-2);
+    text-align: left;
+  }
+  .mfold .n {
+    color: var(--faint);
+    font-weight: 500;
+  }
+  .mfold :global(svg) {
+    flex-shrink: 0;
+  }
+  .chev {
+    display: flex;
+    color: var(--faint);
+    transition: transform 0.15s;
+  }
+  .chev.closed {
+    transform: rotate(-90deg);
+  }
+  .madd {
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+  }
+  .mmore {
+    width: 100%;
+    min-height: 44px;
+    border: 0;
+    border-top: 1px solid var(--line);
+    background: transparent;
+    color: var(--accent-text);
+    font-size: 13px;
+    font-weight: 600;
+  }
   .crumb {
     color: var(--muted);
     font-weight: 500;
@@ -326,16 +402,21 @@
     border-color: var(--line-strong);
   }
   .dcard :global(.row) {
-    font-size: 13.5px;
-    padding: 10px 12px;
+    min-height: 0;
+  }
+  .dcard :global(.st) {
+    width: 36px;
+    padding: 11px 0 0 6px;
   }
   .dcard :global(.body) {
-    flex-direction: column-reverse;
-    gap: 6px;
+    padding: 10px 12px 10px 2px;
   }
   .dcard :global(.title) {
-    font-weight: 500;
-    font-size: 13.5px !important;
+    font-size: 13.5px;
+  }
+  .dcard :global(.meta) {
+    flex-wrap: wrap;
+    row-gap: 4px;
   }
   h1 {
     display: flex;
@@ -405,32 +486,6 @@
     display: flex;
     align-items: center;
     gap: 6px;
-  }
-  .mini {
-    margin-left: auto;
-    border: 0;
-    background: transparent;
-    color: var(--muted);
-    font-size: 12px;
-    min-height: 32px;
-  }
-  .more {
-    width: 100%;
-    min-height: 44px;
-    margin-top: 8px;
-    border: 1px dashed var(--line-strong);
-    border-radius: 12px;
-    background: transparent;
-    color: var(--muted);
-    font-size: 13px;
-    font-weight: 600;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-  }
-  .more.collapsed {
-    margin-top: 12px;
   }
   .board {
     display: flex;
