@@ -6,6 +6,8 @@
   import { api, ApiError, type IssueDetail, type Status } from '../lib/api';
   import { fmtAgo, i18n } from '../lib/i18n.svelte';
   import { renderMarkdown } from '../lib/markdown';
+  import { keys } from '../lib/keys.svelte';
+  import { media } from '../lib/media.svelte';
   import { router } from '../lib/router.svelte';
   import { store } from '../lib/store.svelte';
 
@@ -168,21 +170,31 @@
     if (e.action === 'linked_github' && e.data) return `${t.actions.linked_github} ${e.data.repo}#${e.data.number}`;
     return t.actions[e.action ?? ''] ?? e.action ?? '';
   }
+  // ----- keyboard -----
+  let fields: { open: (which: 'status' | 'priority' | 'labels' | 'due') => void } | undefined = $state();
+  $effect(() =>
+    keys.use({
+      s: () => fields?.open('status'),
+      p: () => fields?.open('priority'),
+      l: () => fields?.open('labels'),
+      d: () => fields?.open('due'),
+      e: startTitle,
+      Escape: () => router.back(`/p/${view.project}`),
+    }),
+  );
+  const createdAt = $derived(detail?.created_at ?? cached?.created_at ?? null);
+  const updatedAt = $derived(detail?.updated_at ?? cached?.updated_at ?? null);
+  let copied = $state(false);
+  function copyId() {
+    navigator.clipboard?.writeText(id);
+    copied = true;
+    setTimeout(() => (copied = false), 1500);
+  }
+
   const initial = (actor: string) => (t.actors[actor] ?? actor).slice(0, 1).toUpperCase();
 </script>
 
-<div class="page plain issue">
-  <header class="topbar">
-    <button class="icon-btn" onclick={() => router.back(`/p/${view.project}`)} aria-label={t.back}><Icon name="back" /></button>
-    <a class="crumb" href={`/p/${view.project}`}>{projectName} · {id}</a>
-    <button class="icon-btn" onclick={() => (menu = true)} aria-label={t.moreActions}><Icon name="more" size={20} /></button>
-  </header>
-
-  {#if notFound && !cached}
-    <p class="empty">{t.notFound}</p>
-  {:else if !cached && !detail}
-    <p class="empty">{t.loading}</p>
-  {:else}
+{#snippet content()}
     {#if parent}
       <a class="parent" href={`/i/${parent.identifier}`}>
         <Icon name="parent" size={14} />
@@ -212,7 +224,9 @@
       <h1 class="title"><button class="plain-btn" onclick={startTitle}>{view.title}</button></h1>
     {/if}
 
-    <IssueFields status={view.status} priority={view.priority} labels={view.labels} due_date={view.due_date} onchange={update} />
+    {#if !media.desktop}
+      <IssueFields bind:this={fields} status={view.status} priority={view.priority} labels={view.labels} due_date={view.due_date} onchange={update} />
+    {/if}
 
     {#if error}<p class="error" role="alert">{error}</p>{/if}
 
@@ -286,23 +300,96 @@
         {/each}
       </ol>
     </section>
-  {/if}
-</div>
+{/snippet}
 
-{#if cached || detail}
-  <form class="composer" onsubmit={send}>
+{#snippet commentBox(inline: boolean)}
+  <form class="composer" class:inline onsubmit={send}>
     <label for="comment" class="sr-only">{t.comment}</label>
     <textarea
       id="comment"
       rows="1"
       bind:value={comment}
-      placeholder={t.writeComment}
+      placeholder={inline ? `${t.writeComment}  ⌘↵` : t.writeComment}
       onkeydown={(e) => {
         if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) (e.currentTarget.form as HTMLFormElement).requestSubmit();
       }}
     ></textarea>
     <button class="send" aria-label={t.send} disabled={sending || !comment.trim()}><Icon name="send" size={18} /></button>
   </form>
+{/snippet}
+
+{#if media.desktop}
+  <div class="dpage">
+    <header class="dhead">
+      <h1 class="dcrumbs">
+        <a href="/">{t.projects}</a>
+        <Icon name="arrow" size={12} />
+        <a href={`/p/${view.project}`}>{projectName}</a>
+        <Icon name="arrow" size={12} />
+        <span class="mono">{id}</span>
+      </h1>
+      <span class="spacer"></span>
+      <button class="hbtn" onclick={copyId}>{#if copied}<Icon name="check" size={14} />{t.copied}{:else}{t.copyLink}{/if}</button>
+      <button class="icon-btn" onclick={() => (menu = true)} aria-label={t.moreActions} title={t.moreActions}><Icon name="more" size={16} /></button>
+    </header>
+    {#if notFound && !cached}
+      <p class="empty dpad">{t.notFound}</p>
+    {:else if !cached && !detail}
+      <p class="empty dpad">{t.loading}</p>
+    {:else}
+      <div class="dissue">
+        <article class="dmain">
+          {@render content()}
+          {@render commentBox(true)}
+        </article>
+        <aside class="dprops" aria-label={t.properties}>
+          <h2>{t.properties}</h2>
+          <IssueFields bind:this={fields} vertical status={view.status} priority={view.priority} labels={view.labels} due_date={view.due_date} onchange={update} />
+          <div class="prop">
+            <span class="plabel">{t.parent}</span>
+            <button
+              class="pval"
+              onclick={() => {
+                parentFilter = '';
+                parentPicker = true;
+              }}
+            >
+              {#if parent}<span class="mono">{parent.identifier}</span><span class="ell">{parent.title}</span>{:else}<span class="faint">{t.setParent}</span>{/if}
+            </button>
+          </div>
+          <div class="prop">
+            <span class="plabel">{t.project}</span>
+            <a class="pval" href={`/p/${view.project}`}><span class="mono faint">{view.project}</span><span class="ell">{projectName}</span></a>
+          </div>
+          <hr />
+          {#if createdAt}<div class="prop small"><span class="plabel">{t.createdAt}</span><span class="pstatic">{fmtAgo(createdAt)}</span></div>{/if}
+          {#if updatedAt}<div class="prop small"><span class="plabel">{t.updatedAt}</span><span class="pstatic">{fmtAgo(updatedAt)}</span></div>{/if}
+          <p class="keyhint"><kbd>S</kbd><kbd>P</kbd><kbd>L</kbd><kbd>D</kbd> {t.properties} · <kbd>?</kbd></p>
+        </aside>
+      </div>
+    {/if}
+  </div>
+{:else}
+<div class="page plain issue">
+  <header class="topbar">
+    <button class="icon-btn" onclick={() => router.back(`/p/${view.project}`)} aria-label={t.back}><Icon name="back" /></button>
+    <a class="crumb" href={`/p/${view.project}`}>{projectName} · {id}</a>
+    <button class="icon-btn" onclick={() => (menu = true)} aria-label={t.moreActions}><Icon name="more" size={20} /></button>
+  </header>
+
+  {#if notFound && !cached}
+    <p class="empty">{t.notFound}</p>
+  {:else if !cached && !detail}
+    <p class="empty">{t.loading}</p>
+  {:else}
+    {@render content()}
+  {/if}
+</div>
+
+{#if cached || detail}
+  {@render commentBox(false)}
+{/if}
+
 {/if}
 
 <Sheet bind:open={menu}>
@@ -366,6 +453,155 @@
 </Sheet>
 
 <style>
+  .spacer {
+    flex: 1;
+  }
+  .dcrumbs a {
+    color: var(--muted);
+    font-weight: 500;
+  }
+  .dcrumbs a:hover {
+    color: var(--ink);
+  }
+  .dcrumbs :global(svg) {
+    color: var(--faint);
+  }
+  .dpad {
+    padding: 24px 32px;
+  }
+  .dissue {
+    flex: 1;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+  }
+  .dmain {
+    padding: 28px 48px 64px;
+    max-width: 860px;
+    width: 100%;
+    margin: 0 auto;
+  }
+  .dmain .title {
+    font-size: 24px;
+    margin: 4px 0 6px;
+  }
+  .dprops {
+    border-left: 1px solid var(--line);
+    padding: 20px 16px;
+    position: sticky;
+    top: 52px;
+    align-self: start;
+    max-height: calc(100dvh - 52px);
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .dprops h2 {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--faint);
+    margin: 0 0 8px 8px;
+  }
+  .dprops hr {
+    border: 0;
+    border-top: 1px solid var(--line);
+    margin: 10px 0;
+    width: 100%;
+  }
+  .prop {
+    display: grid;
+    grid-template-columns: 84px minmax(0, 1fr);
+    align-items: center;
+    min-height: 34px;
+    gap: 4px;
+  }
+  .plabel {
+    font-size: 12.5px;
+    color: var(--muted);
+    padding-left: 8px;
+  }
+  .pval {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 30px;
+    padding: 0 8px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    text-align: left;
+    font-size: 13px;
+    color: var(--ink);
+    min-width: 0;
+  }
+  .pval:hover {
+    background: var(--hover);
+  }
+  .pstatic {
+    font-size: 12.5px;
+    color: var(--muted);
+    padding-left: 8px;
+  }
+  .ell {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    min-width: 0;
+  }
+  .faint {
+    color: var(--faint);
+  }
+  .keyhint {
+    margin: 16px 8px 0;
+    font-size: 12px;
+    color: var(--faint);
+    display: flex;
+    align-items: center;
+    gap: 3px;
+  }
+  .keyhint kbd {
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 2px 4px;
+    background: var(--surface-2);
+  }
+  .dmain .sec-head {
+    margin-top: 28px;
+    margin-bottom: 8px;
+  }
+  .dmain .sec-head .section-title {
+    margin: 0;
+  }
+  .dmain .sec-head .link {
+    min-height: 0;
+  }
+  .dmain .sub {
+    min-height: 40px;
+    font-size: 13.5px;
+  }
+  .dmain .sub:hover {
+    background: var(--hover);
+  }
+  .composer.inline {
+    position: static;
+    padding: 0;
+    margin-top: 20px;
+    background: transparent;
+    border: 0;
+    align-items: flex-end;
+  }
+  .composer.inline textarea {
+    border-radius: 10px;
+    min-height: 76px;
+    padding: 10px 12px;
+    font-size: 14px;
+    background: var(--surface);
+  }
+  .composer.inline .send {
+    width: 36px;
+    height: 36px;
+    border-radius: 9px;
+  }
   .issue {
     padding-bottom: calc(var(--safe-b) + 96px);
   }

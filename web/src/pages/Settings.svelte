@@ -2,6 +2,7 @@
   import Icon from '../components/Icon.svelte';
   import { api, type Token } from '../lib/api';
   import { fmtAgo, i18n, type LangPref } from '../lib/i18n.svelte';
+  import { media } from '../lib/media.svelte';
   import { router } from '../lib/router.svelte';
   import { store } from '../lib/store.svelte';
   import { theme, type ThemePref } from '../lib/theme.svelte';
@@ -66,11 +67,14 @@
   const themes: ThemePref[] = ['system', 'light', 'dark'];
 </script>
 
+{#if media.desktop}<header class="dhead"><h1>{t.settings}</h1></header>{/if}
 <div class="page plain">
-  <header class="topbar">
-    <button class="icon-btn" onclick={() => router.back('/')} aria-label={t.back}><Icon name="back" /></button>
-    <h1>{t.settings}</h1>
-  </header>
+  {#if !media.desktop}
+    <header class="topbar">
+      <button class="icon-btn" onclick={() => router.back('/')} aria-label={t.back}><Icon name="back" /></button>
+      <h1>{t.settings}</h1>
+    </header>
+  {/if}
 
   <fieldset>
     <legend class="section-title">{t.language}</legend>

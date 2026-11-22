@@ -1,6 +1,9 @@
 <script lang="ts">
   import Icon from '../components/Icon.svelte';
+  import IssueLine from '../components/IssueLine.svelte';
   import IssueRow from '../components/IssueRow.svelte';
+  import { keys } from '../lib/keys.svelte';
+  import { media } from '../lib/media.svelte';
   import ProjectForm from '../components/ProjectForm.svelte';
   import StatusIcon from '../components/StatusIcon.svelte';
   import type { Issue, Status } from '../lib/api';
@@ -44,10 +47,83 @@
     return ORDER.map((s) => ({ status: s, issues: by.get(s)! }));
   });
 
-  const PAGE = 8;
+  const PAGE = $derived(media.desktop ? 50 : 8);
   const isOpen = (s: string) => expanded[s] ?? true;
 </script>
 
+{#if media.desktop}
+<div class="dpage">
+  <header class="dhead">
+    <h1>
+      <a class="crumb" href="/">{t.projects}</a>
+      <Icon name="arrow" size={12} />
+      <span class="dkey mono">{key}</span>
+      {project?.name ?? key}
+    </h1>
+    {#if project}
+      <button class="icon-btn" onclick={() => (editing = true)} aria-label={t.editProject} title={t.editProject}><Icon name="more" size={16} /></button>
+    {/if}
+    <span class="spacer"></span>
+    <span class="dprog" title={t.progress}>
+      <span class="ring" style:--p={c.progress}></span>
+      <span class="mono">{Math.round(c.progress * 100)}% · {c.counts.done}/{c.total}</span>
+    </span>
+    <div class="seg-d" role="group" aria-label="View">
+      <button aria-pressed={view === 'list'} onclick={() => setView('list')}>{t.list}</button>
+      <button aria-pressed={view === 'board'} onclick={() => setView('board')}>{t.board}</button>
+    </div>
+    <a class="hbtn primary" href={keys.newIssueHref()}><Icon name="plus" size={14} />{t.newIssue}<kbd>C</kbd></a>
+  </header>
+  {#if view === 'list'}
+    <div class="dbody">
+      {#if project?.description}<p class="ddesc">{project.description}</p>{/if}
+      <div class="dlist">
+        {#each groups as g (g.status)}
+          {#if g.issues.length}
+            {@const max = limit[g.status] ?? PAGE}
+            <div class="dgroup">
+              <button
+                class="fold"
+                aria-expanded={isOpen(g.status)}
+                onclick={() => (expanded[g.status] = !isOpen(g.status))}
+              ><span class="chev" class:closed={!isOpen(g.status)}><Icon name="chevron" size={13} /></span></button>
+              <StatusIcon status={g.status} size={14} />
+              {t.statuses[g.status]}
+              <span class="n">{g.issues.length}</span>
+              <span class="spacer"></span>
+              <a class="addin" href={`/new?project=${key}`} aria-label={t.newIssue} title={t.newIssue}><Icon name="plus" size={14} /></a>
+            </div>
+            {#if isOpen(g.status)}
+              {#each g.issues.slice(0, max) as issue (issue.id)}
+                <IssueLine {issue} />
+              {/each}
+              {#if g.issues.length > max}
+                <button class="dmore" onclick={() => (limit[g.status] = max + 100)}>{t.showMore(g.issues.length - max)}</button>
+              {/if}
+            {/if}
+          {/if}
+        {/each}
+      </div>
+      {#if c.total === 0 && c.counts.canceled === 0}
+        <p class="empty">{t.noneYet}</p>
+      {/if}
+    </div>
+  {:else}
+    <div class="dboard">
+      {#each groups.filter((g) => g.status !== 'canceled') as g (g.status)}
+        <section class="dcol">
+          <h2 class="dcolhead"><StatusIcon status={g.status} size={14} />{t.statuses[g.status]}<span class="n">{g.issues.length}</span></h2>
+          <div class="dcards">
+            {#each g.issues.slice(0, 100) as issue (issue.id)}
+              <div class="dcard"><IssueRow {issue} /></div>
+            {/each}
+          </div>
+        </section>
+      {/each}
+    </div>
+  {/if}
+</div>
+{:else}
 <div class="page">
   <header class="topbar">
     <button class="icon-btn" onclick={() => router.back('/')} aria-label={t.back}><Icon name="back" /></button>
@@ -119,10 +195,148 @@
     </div>
   {/if}
 </div>
+{/if}
 
 <ProjectForm bind:open={editing} {project} />
 
 <style>
+  .crumb {
+    color: var(--muted);
+    font-weight: 500;
+  }
+  .crumb:hover {
+    color: var(--ink);
+  }
+  .dhead :global(svg) {
+    color: var(--faint);
+  }
+  .dkey {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted);
+    padding: 1px 5px;
+    border-radius: 5px;
+    border: 1px solid var(--line);
+    background: var(--surface-2);
+  }
+  .spacer {
+    flex: 1;
+  }
+  .dprog {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12.5px;
+    color: var(--muted);
+    margin-right: 4px;
+  }
+  .ring {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: conic-gradient(var(--accent) calc(var(--p) * 360deg), var(--line) 0);
+    -webkit-mask: radial-gradient(circle, transparent 4px, #000 4.5px);
+    mask: radial-gradient(circle, transparent 4px, #000 4.5px);
+  }
+  .ddesc {
+    margin: 0 0 16px;
+    color: var(--muted);
+    font-size: 13.5px;
+    max-width: 760px;
+  }
+  .fold {
+    margin-left: -6px;
+    padding: 4px !important;
+  }
+  .chev {
+    display: flex;
+    transition: transform 0.12s;
+  }
+  .chev.closed {
+    transform: rotate(-90deg);
+  }
+  .addin {
+    display: flex;
+    padding: 4px;
+    border-radius: 6px;
+    color: var(--muted);
+  }
+  .addin:hover {
+    background: var(--hover);
+    color: var(--ink);
+  }
+  .dmore {
+    width: 100%;
+    height: 36px;
+    border: 0;
+    border-bottom: 1px solid var(--line-soft);
+    background: transparent;
+    color: var(--muted);
+    font-size: 12.5px;
+    font-weight: 600;
+  }
+  .dmore:hover {
+    background: var(--hover);
+    color: var(--ink);
+  }
+  .dboard {
+    display: flex;
+    gap: 12px;
+    padding: 16px 24px 32px;
+    overflow-x: auto;
+    flex: 1;
+    align-items: flex-start;
+  }
+  .dcol {
+    flex: 1 1 0;
+    min-width: 220px;
+    max-width: 380px;
+    background: var(--surface-2);
+    border: 1px solid var(--line-soft);
+    border-radius: 12px;
+    padding: 4px 8px 8px;
+  }
+  .dcolhead {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    margin: 0;
+    height: 38px;
+    padding: 0 6px;
+  }
+  .dcolhead .n {
+    color: var(--faint);
+    font-weight: 500;
+  }
+  .dcards {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .dcard {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+  }
+  .dcard:hover {
+    border-color: var(--line-strong);
+  }
+  .dcard :global(.row) {
+    font-size: 13.5px;
+    padding: 10px 12px;
+  }
+  .dcard :global(.body) {
+    flex-direction: column-reverse;
+    gap: 6px;
+  }
+  .dcard :global(.title) {
+    font-weight: 500;
+    font-size: 13.5px !important;
+  }
   h1 {
     display: flex;
     align-items: baseline;
