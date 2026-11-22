@@ -102,6 +102,7 @@ api.use('/integrations/*', async (c, next) => {
   await next();
 });
 api.get('/integrations/github', async (c) => c.json(gh.status(c.env, await gh.loadApp(c.env.DB))));
+api.get('/integrations/github/repos', async (c) => c.json(await gh.installedRepos(c.env)));
 // Step 1: the page POSTs this manifest to GitHub as a form.
 api.post('/integrations/github/manifest', async (c) => c.json(await gh.startManifest(c.env)));
 // Step 2: GitHub sends the browser back here after you confirm the app.
@@ -117,7 +118,14 @@ api.get('/integrations/github/callback', async (c) => {
 });
 api.get('/integrations/github/setup', async (c) => {
   const id = Number(c.req.query('installation_id'));
-  if (Number.isSafeInteger(id) && id > 0) await gh.setInstallation(c.env.DB, id);
+  if (Number.isSafeInteger(id) && id > 0) {
+    try {
+      await gh.recordInstallation(c.env, id);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'failed';
+      return c.redirect(`/settings?github=error&message=${encodeURIComponent(msg)}`, 302);
+    }
+  }
   return c.redirect('/settings?github=installed', 302);
 });
 // Forget the app here. Delete it on GitHub too (the page links there).

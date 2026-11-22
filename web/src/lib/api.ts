@@ -80,7 +80,7 @@ export interface GithubStatus {
   connected: boolean;
   app?: { name: string; slug: string; html_url: string; owner: string | null; settings_url: string; install_url: string };
   installed?: boolean;
-  installation_url?: string | null;
+  accounts?: string[];
   webhook_url: string;
 }
 
@@ -125,5 +125,10 @@ export const api = {
   revokeToken: (id: string) => request<unknown>('DELETE', `/tokens/${encodeURIComponent(id)}`),
   github: () => request<GithubStatus>('GET', '/integrations/github'),
   githubManifest: () => request<{ action: string; manifest: unknown }>('POST', '/integrations/github/manifest'),
+  githubRepos: () =>
+    request<{ selection: 'all' | 'selected' | null; repos: { full_name: string; html_url: string; private: boolean }[] }>(
+      'GET',
+      '/integrations/github/repos',
+    ),
   disconnectGithub: () => request<GithubStatus>('DELETE', '/integrations/github'),
 };

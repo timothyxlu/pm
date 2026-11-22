@@ -74,9 +74,17 @@
     if (r === 'error') ghError = t.githubError(q.get('message') ?? '');
     if (r) history.replaceState(history.state, '', location.pathname);
   }
+  let ghRepos = $state<Awaited<ReturnType<typeof api.githubRepos>> | null>(null);
+  let ghReposFailed = $state(false);
   async function loadGithub() {
     try {
       gh = await api.github();
+      if (gh.connected) {
+        api
+          .githubRepos()
+          .then((r) => (ghRepos = r))
+          .catch(() => (ghReposFailed = true));
+      }
     } catch (e) {
       store.handleError(e);
     }
@@ -113,6 +121,7 @@
     ghConfirm = false;
     try {
       gh = await api.disconnectGithub();
+      ghRepos = null;
       ghNotice = t.githubDisconnected;
     } catch (e) {
       store.handleError(e);
@@ -173,20 +182,32 @@
           <div class="tokinfo">
             {#if gh.connected && gh.app}
               <span>{t.githubApp(gh.app.name)}</span>
-              <span class="sub" class:warn={!gh.installed}>{gh.installed ? t.githubInstalled : t.githubNotInstalled}</span>
+              <span class="sub" class:warn={!gh.installed && !ghRepos?.selection}>
+                {#if gh.accounts?.length}{gh.accounts.join(', ')} · {/if}
+                {#if ghRepos?.selection === 'all'}{t.githubAllRepos(ghRepos.repos.length)}
+                {:else if ghRepos?.selection}{t.githubSomeRepos(ghRepos.repos.length)}
+                {:else if ghReposFailed}{t.githubReposError}
+                {:else}{gh.installed ? t.githubInstalled : t.githubNotInstalled}{/if}
+              </span>
             {:else}
               <span>GitHub</span>
               <span class="sub">{t.githubNote}</span>
             {/if}
           </div>
           {#if gh.connected && gh.app}
-            <a class="btn" class:primary={!gh.installed} href={gh.installed && gh.installation_url ? gh.installation_url : gh.app.install_url} target="_blank" rel="noopener">
+            <a class="btn" class:primary={!gh.installed} href={gh.app.install_url} target="_blank" rel="noopener">
               {gh.installed ? t.githubManageRepos : t.githubInstall}
             </a>
           {:else}
             <button class="btn primary" onclick={connectGithub} disabled={ghBusy}>{ghBusy ? t.githubConnecting : t.connectGithub}</button>
           {/if}
         </div>
+        {#each ghRepos?.repos ?? [] as r (r.full_name)}
+          <a class="reporow" href={r.html_url} target="_blank" rel="noopener">
+            <span>{r.full_name}</span>
+            {#if r.private}<Icon name="lock" size={14} />{/if}
+          </a>
+        {/each}
       </div>
       {#if gh.connected && gh.app}
         <div class="ghlinks">
@@ -362,6 +383,19 @@
   }
   .warn {
     color: var(--danger);
+  }
+  .reporow {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 14px 10px 46px;
+    border-top: 1px solid var(--line);
+    font-size: 14px;
+    color: var(--text);
+    text-decoration: none;
+  }
+  .reporow :global(svg) {
+    color: var(--muted);
   }
   .linkbtn {
     border: 0;
