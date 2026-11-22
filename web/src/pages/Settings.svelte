@@ -1,6 +1,6 @@
 <script lang="ts">
   import Icon from '../components/Icon.svelte';
-  import { api, type Token } from '../lib/api';
+  import { api, type GithubStatus, type Token } from '../lib/api';
   import { fmtAgo, i18n, type LangPref } from '../lib/i18n.svelte';
   import { media } from '../lib/media.svelte';
   import { router } from '../lib/router.svelte';
@@ -59,6 +59,67 @@
     copied = true;
   }
 
+  // ----- GitHub App -----
+  let gh = $state<GithubStatus | null>(null);
+  let ghBusy = $state(false);
+  let ghNotice = $state('');
+  let ghError = $state('');
+  let ghConfirm = $state(false);
+
+  // Back from GitHub: /settings?github=installed or ?github=error&message=…
+  {
+    const q = new URLSearchParams(location.search);
+    const r = q.get('github');
+    if (r === 'installed') ghNotice = t.githubInstalledToast;
+    if (r === 'error') ghError = t.githubError(q.get('message') ?? '');
+    if (r) history.replaceState(history.state, '', location.pathname);
+  }
+  async function loadGithub() {
+    try {
+      gh = await api.github();
+    } catch (e) {
+      store.handleError(e);
+    }
+  }
+  loadGithub();
+
+  // GitHub's manifest flow wants a top-level form POST to github.com.
+  async function connectGithub() {
+    ghBusy = true;
+    ghError = '';
+    try {
+      const { action, manifest } = await api.githubManifest();
+      const form = document.createElement('form');
+      form.method = 'post';
+      form.action = action;
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = 'manifest';
+      input.value = JSON.stringify(manifest);
+      form.append(input);
+      document.body.append(form);
+      form.submit();
+    } catch (e) {
+      store.handleError(e);
+      ghError = (e as Error).message;
+      ghBusy = false;
+    }
+  }
+  async function disconnectGithub() {
+    if (!ghConfirm) {
+      ghConfirm = true;
+      return;
+    }
+    ghConfirm = false;
+    try {
+      gh = await api.disconnectGithub();
+      ghNotice = t.githubDisconnected;
+    } catch (e) {
+      store.handleError(e);
+      ghError = (e as Error).message;
+    }
+  }
+
   const langs: { v: LangPref; label: () => string; sub?: () => string }[] = [
     { v: 'system', label: () => t.followSystem, sub: () => t.currentLang(i18n.systemLang === 'zh' ? '中文' : 'English') },
     { v: 'zh', label: () => '中文' },
@@ -102,6 +163,34 @@
       {/each}
     </div>
   </fieldset>
+
+  <section>
+    <h2 class="section-title">{t.connections} · {t.github}</h2>
+    <p class="hint note top">{t.githubNote}</p>
+    {#if ghNotice}<p class="ok">{ghNotice}</p>{/if}
+    {#if gh?.connected && gh.app}
+      <div class="list">
+        <div class="tokrow">
+          <div class="tokinfo">
+            <span>{t.githubApp(gh.app.name)}</span>
+            <span class="sub" class:warn={!gh.installed}>{gh.installed ? t.githubInstalled : t.githubNotInstalled}</span>
+          </div>
+          <a class="btn" class:primary={!gh.installed} href={gh.installed && gh.installation_url ? gh.installation_url : gh.app.install_url} target="_blank" rel="noopener">
+            {gh.installed ? t.githubManageRepos : t.githubInstall}
+          </a>
+        </div>
+      </div>
+      <div class="ghlinks">
+        <a class="hint" href={gh.app.settings_url} target="_blank" rel="noopener">{t.githubAppSettings}</a>
+        <button class="btn danger" onclick={disconnectGithub} onblur={() => (ghConfirm = false)}>
+          {ghConfirm ? t.githubDisconnectConfirm : t.githubDisconnect}
+        </button>
+      </div>
+    {:else if gh}
+      <button class="btn primary" onclick={connectGithub} disabled={ghBusy}>{ghBusy ? t.githubConnecting : t.connectGithub}</button>
+    {/if}
+    {#if ghError}<p class="error">{ghError}</p>{/if}
+  </section>
 
   <section>
     <h2 class="section-title">{t.connections} · {t.apiTokens}</h2>
@@ -250,6 +339,30 @@
   .error {
     color: var(--danger);
     font-size: 14px;
+  }
+  section + section {
+    margin-top: 24px;
+  }
+  .ghlinks {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 10px;
+  }
+  .warn {
+    color: var(--danger);
+  }
+  .ok {
+    color: var(--accent-text);
+    font-size: 14px;
+    margin: 0 2px 10px;
+  }
+  a.btn {
+    display: inline-flex;
+    align-items: center;
+    text-decoration: none;
+    white-space: nowrap;
   }
   .footer {
     margin-top: 32px;

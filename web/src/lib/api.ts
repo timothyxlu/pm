@@ -76,6 +76,14 @@ export interface Token {
   revoked_at: string | null;
 }
 
+export interface GithubStatus {
+  connected: boolean;
+  app?: { name: string; slug: string; html_url: string; owner: string | null; settings_url: string; install_url: string };
+  installed?: boolean;
+  installation_url?: string | null;
+  webhook_url: string;
+}
+
 export class SessionExpired extends Error {}
 export class ApiError extends Error {
   constructor(
@@ -115,4 +123,7 @@ export const api = {
   tokens: () => request<Token[]>('GET', '/tokens'),
   createToken: (name: string) => request<{ id: string; name: string; token: string }>('POST', '/tokens', { name }),
   revokeToken: (id: string) => request<unknown>('DELETE', `/tokens/${encodeURIComponent(id)}`),
+  github: () => request<GithubStatus>('GET', '/integrations/github'),
+  githubManifest: () => request<{ action: string; manifest: unknown }>('POST', '/integrations/github/manifest'),
+  disconnectGithub: () => request<GithubStatus>('DELETE', '/integrations/github'),
 };

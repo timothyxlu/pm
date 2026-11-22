@@ -9,7 +9,8 @@ export interface Env {
   ACCESS_TEAM_DOMAIN: string;
   /** AUD tag of the Access application covering the whole host. */
   ACCESS_AUD: string;
-  /** Shared secret of the GitHub webhook (a Worker secret, not a var). */
+  /** Shared secret of per-repo GitHub webhooks (a Worker secret, not a var).
+   *  The GitHub App's own secret is stored in D1 and works alongside it. */
   GITHUB_WEBHOOK_SECRET?: string;
   /** Local development only: "1" skips auth. Never set in production. */
   DEV_AUTH_BYPASS?: string;
