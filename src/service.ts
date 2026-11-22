@@ -625,3 +625,159 @@ export async function revokeToken(db: D1Database, id: string) {
   if (!r.meta.changes) throw new HttpError(404, 'Token not found or already revoked');
   return { id, revoked: true };
 }
+
+// ---------- import (migration from Linear etc.) ----------
+
+export const importIssuesInput = z.object({
+  project: z.string().describe('Project key the issues go into (must exist)'),
+  issues: z
+    .array(
+      z.object({
+        identifier: z.string().describe('Original id to keep, e.g. "ENG-42"'),
+        title: z.string().min(1),
+        description: z.string().nullable().optional().describe('Markdown'),
+        status: z.enum(STATUSES),
+        priority: z.number().int().min(0).max(4).optional(),
+        labels: z.array(z.string()).optional(),
+        parent: z.string().nullable().optional().describe('Parent identifier; may be in this batch or already imported'),
+        due_date: z.string().nullable().optional(),
+        sort_order: z.number().optional(),
+        created_at: z.string().describe('ISO timestamp from the source system'),
+        completed_at: z.string().nullable().optional(),
+        comments: z
+          .array(
+            z.object({
+              source_id: z.string().describe('Comment id in the source system; makes re-imports idempotent'),
+              body: z.string().min(1),
+              created_at: z.string(),
+              actor: z.enum(['me', 'claude', 'github']).optional().describe('Defaults to me'),
+            }),
+          )
+          .optional(),
+      }),
+    )
+    .min(1)
+    .max(50),
+});
+export type ImportIssuesInput = z.infer<typeof importIssuesInput>;
+
+/**
+ * Insert or update issues keeping their original identifiers and timestamps.
+ * Idempotent: re-running with the same data updates rows in place, and
+ * comments are keyed by their source id. updated_at is set to now so that
+ * clients syncing incrementally pick the rows up.
+ */
+export async function importIssues(db: D1Database, input: ImportIssuesInput, actor: Actor) {
+  const project = await projectByKey(db, input.project);
+  const ts = now();
+  const issues = input.issues.map((i) => ({ ...i, identifier: i.identifier.toUpperCase(), parent: i.parent?.toUpperCase() ?? i.parent }));
+  for (const i of issues) {
+    if (!IDENTIFIER_RE.test(i.identifier)) throw new HttpError(400, `Invalid identifier ${i.identifier}`);
+  }
+
+  // One lookup for everything referenced: the issues themselves and their parents.
+  const refs = [...new Set(issues.flatMap((i) => [i.identifier, ...(i.parent ? [i.parent] : [])]))];
+  const existing = new Map<string, { id: string; project_id: string; deleted_at: string | null }>();
+  for (let k = 0; k < refs.length; k += 90) {
+    const chunk = refs.slice(k, k + 90);
+    const { results } = await db
+      .prepare(`SELECT id, identifier, project_id, deleted_at FROM issues WHERE identifier IN (${chunk.map(() => '?').join(',')})`)
+      .bind(...chunk)
+      .all<{ id: string; identifier: string; project_id: string; deleted_at: string | null }>();
+    for (const r of results) existing.set(r.identifier, r);
+  }
+  for (const i of issues) {
+    const e = existing.get(i.identifier);
+    if (e && e.project_id !== project.id) throw new HttpError(409, `${i.identifier} already exists in another project`);
+  }
+  const ids = new Map<string, string>();
+  for (const i of issues) ids.set(i.identifier, existing.get(i.identifier)?.id ?? newId());
+
+  // Label names are case-insensitive (COLLATE NOCASE), so resolve one name per lowercase key.
+  const labelNames = new Map<string, string>();
+  for (const l of issues.flatMap((i) => i.labels ?? [])) {
+    const n = l.trim();
+    if (n && !labelNames.has(n.toLowerCase())) labelNames.set(n.toLowerCase(), n);
+  }
+  const labelId = new Map<string, string>();
+  for (const [key, name] of labelNames) labelId.set(key, (await resolveLabelIds(db, [name]))[0]);
+
+  const stmts: D1PreparedStatement[] = [];
+  // Parents are set after every row exists, so a child may come before its parent in the batch.
+  const parentStmts: D1PreparedStatement[] = [];
+  const unresolved: string[] = [];
+  let created = 0;
+  let updated = 0;
+  let comments = 0;
+  let maxNumber = 0;
+  const prefix = `${project.key}-`;
+
+  for (const i of issues) {
+    const id = ids.get(i.identifier)!;
+    if (i.identifier.startsWith(prefix)) maxNumber = Math.max(maxNumber, Number(i.identifier.slice(prefix.length)));
+    let parentId: string | null = null;
+    if (i.parent) {
+      parentId = ids.get(i.parent) ?? existing.get(i.parent)?.id ?? null;
+      if (!parentId) unresolved.push(i.identifier);
+      else parentStmts.push(db.prepare('UPDATE issues SET parent_id = ? WHERE id = ?').bind(parentId, id));
+    } else if (i.parent === null) {
+      parentStmts.push(db.prepare('UPDATE issues SET parent_id = NULL WHERE id = ?').bind(id));
+    }
+    const completedAt = i.status === 'done' ? (i.completed_at ?? i.created_at) : null;
+    if (existing.has(i.identifier)) updated++;
+    else created++;
+    stmts.push(
+      db
+        .prepare(
+          `INSERT INTO issues (id, project_id, number, identifier, title, description, status, priority, parent_id,
+                               due_date, sort_order, created_at, updated_at, completed_at, deleted_at)
+           VALUES (?, ?, NULL, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, NULL)
+           ON CONFLICT(identifier) DO UPDATE SET
+             title = excluded.title, description = excluded.description, status = excluded.status,
+             priority = excluded.priority,
+             due_date = excluded.due_date, sort_order = excluded.sort_order, created_at = excluded.created_at,
+             updated_at = excluded.updated_at, completed_at = excluded.completed_at, deleted_at = NULL`,
+        )
+        .bind(
+          id,
+          project.id,
+          i.identifier,
+          i.title,
+          i.description ?? null,
+          i.status,
+          i.priority ?? 0,
+          i.due_date ?? null,
+          i.sort_order ?? Date.parse(i.created_at),
+          i.created_at,
+          ts,
+          completedAt,
+        ),
+    );
+    if (i.labels !== undefined) stmts.push(db.prepare('DELETE FROM issue_labels WHERE issue_id = ?').bind(id));
+    for (const name of new Set((i.labels ?? []).map((l) => l.trim().toLowerCase()).filter(Boolean))) {
+      stmts.push(db.prepare('INSERT OR IGNORE INTO issue_labels (issue_id, label_id) VALUES (?, ?)').bind(id, labelId.get(name)));
+    }
+    for (const c of i.comments ?? []) {
+      comments++;
+      stmts.push(
+        db
+          .prepare('INSERT OR IGNORE INTO comments (id, issue_id, actor, body, created_at) VALUES (?, ?, ?, ?, ?)')
+          .bind(`import:${c.source_id}`, id, c.actor ?? 'me', c.body, c.created_at),
+      );
+    }
+    if (!existing.has(i.identifier)) {
+      stmts.push(await logActivity(db, id, actor, 'imported', { identifier: i.identifier, title: i.title }));
+    }
+  }
+  stmts.push(...parentStmts);
+  if (maxNumber) {
+    // New issues continue after the highest imported number.
+    stmts.push(
+      db.prepare('UPDATE projects SET next_number = MAX(next_number, ?), updated_at = ? WHERE id = ?').bind(maxNumber + 1, ts, project.id),
+    );
+  } else {
+    stmts.push(db.prepare('UPDATE projects SET updated_at = ? WHERE id = ?').bind(ts, project.id));
+  }
+  await db.batch(stmts);
+  return { project: project.key, created, updated, comments, unresolved_parents: unresolved };
+}

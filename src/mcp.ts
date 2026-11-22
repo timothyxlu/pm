@@ -107,6 +107,18 @@ function buildServer(env: Env) {
   );
 
   server.registerTool(
+    'import_issues',
+    {
+      description:
+        'Bulk import issues (up to 50 per call) into an existing project, keeping their original identifiers (e.g. ENG-42), ' +
+        'created/completed timestamps and comments. Idempotent: re-importing updates rows in place. Issues whose parent ' +
+        'is not imported yet are listed in unresolved_parents; import them again after the parent exists.',
+      inputSchema: svc.importIssuesInput.shape,
+    },
+    wrap(async (args) => svc.importIssues(db, args, ACTOR)),
+  );
+
+  server.registerTool(
     'link_github',
     {
       description: 'Link a GitHub pull request or issue URL to an issue.',
