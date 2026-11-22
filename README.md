@@ -21,7 +21,7 @@ Personal project tracker on Cloudflare: one Worker at `pm.timothyxlu.xyz` servin
 
 ```sh
 npm install
-printf 'DEV_AUTH_BYPASS=1\nPUBLIC_URL=http://localhost:8787\n' > .dev.vars   # local only
+printf 'DEV_AUTH_BYPASS=1\nPUBLIC_URL=http://localhost:8787\nGITHUB_WEBHOOK_SECRET=smoke-secret\n' > .dev.vars   # local only
 npm run db:migrate:local
 npm run build                             # web app into public/
 npm run dev                               # http://localhost:8787
@@ -49,6 +49,27 @@ Cloudflare Access (Zero Trust → Access → Applications):
 
 1. Self-hosted app for `pm.timothyxlu.xyz`, policy **Allow** your email, login method GitHub. Set its session duration to about a month. Copy its AUD tag into `ACCESS_AUD` and your team domain into `ACCESS_TEAM_DOMAIN` in `wrangler.jsonc`. This app also guards `/authorize`, the OAuth consent page, which is how MCP sign-in proves it is you.
 2. A second app with policy **Bypass** for the machine endpoints, which the Worker authenticates itself: `pm.timothyxlu.xyz/mcp`, `pm.timothyxlu.xyz/oauth/*`, `pm.timothyxlu.xyz/.well-known/*`, `pm.timothyxlu.xyz/webhooks/*`.
+
+## GitHub pull requests
+
+Like Linear, a pull request moves the issues it refers to:
+
+| PR event | Issue |
+| --- | --- |
+| opened, reopened, pushed to, or draft | Backlog / Todo → In progress |
+| review requested | → In review |
+| merged | → Done (closing references only) |
+| closed without merging | unchanged; the link shows `closed` |
+
+A PR refers to an issue when the identifier is in its **branch name** (`dev-123-fix-rss`, `claude/dev-123`), its **title** (`DEV-123 Fix RSS`), or its description after a closing word (`Fixes DEV-123`, also close/resolve/complete, and lists like `Fixes DEV-1, DEV-2`). These close the issue on merge. `Part of DEV-123` (also refs / related to / contributes to / towards) links the PR and starts the issue but never closes it. Bare mentions in the description are ignored. Statuses only move forward, so a done or canceled issue stays put, and redelivered events are harmless. Changes show as GitHub in the activity log, and the PR appears in the issue's GitHub section.
+
+Setup, once:
+
+1. Make a random secret, e.g. `openssl rand -hex 32`.
+2. Add it as the `PM_WEBHOOK_SECRET` repository secret of this repo (Settings → Secrets and variables → Actions). The next deploy stores it as the Worker secret `GITHUB_WEBHOOK_SECRET`. (Or run `npx wrangler secret put GITHUB_WEBHOOK_SECRET` yourself.)
+3. In each repo whose PRs should update issues: Settings → Webhooks → Add webhook. Payload URL `https://pm.timothyxlu.xyz/webhooks/github`, content type `application/json`, the same secret, "Let me select individual events" → **Pull requests** only. GitHub sends a ping, which should get a green tick.
+
+`/webhooks/*` is in the Access Bypass app, so the signature check is what keeps others out; without the secret the endpoint answers 503.
 
 ## Importing from Linear
 

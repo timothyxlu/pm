@@ -1,7 +1,9 @@
 import { Hono } from 'hono';
 import { api } from './api';
 import { authenticate, Principal } from './auth';
+import { PullRequestEvent, verifySignature } from './github';
 import { handleAuthorize, oauthProvider } from './oauth';
+import { applyPullRequest } from './service';
 import { Actor, Env, HttpError } from './types';
 
 type AppEnv = { Bindings: Env; Variables: { principal: Principal; actor: Actor } };
@@ -39,8 +41,28 @@ app.all('/authorize', (c) =>
 // Access sends the browser to sign in, then this sends it back to the app.
 app.get('/login', (c) => c.redirect('/', 302));
 
-// GitHub webhooks arrive in phase 3.
-app.post('/webhooks/github', (c) => c.json({ error: 'Not implemented yet' }, 501));
+// GitHub webhooks (repo or GitHub App webhook, content type application/json,
+// "Pull requests" events). Cloudflare Access bypasses /webhooks/*, so the
+// shared secret is the only thing that proves a request came from GitHub.
+app.post('/webhooks/github', async (c) => {
+  const secret = c.env.GITHUB_WEBHOOK_SECRET;
+  if (!secret) return c.json({ error: 'GITHUB_WEBHOOK_SECRET is not set' }, 503);
+  const raw = await c.req.text();
+  if (!(await verifySignature(secret, raw, c.req.header('X-Hub-Signature-256') ?? null))) {
+    return c.json({ error: 'Bad signature' }, 401);
+  }
+  const event = c.req.header('X-GitHub-Event');
+  if (event === 'ping') return c.json({ ok: true, pong: true });
+  if (event !== 'pull_request') return c.json({ ok: true, ignored: event ?? null });
+  let payload: PullRequestEvent;
+  try {
+    payload = JSON.parse(raw);
+  } catch {
+    return c.json({ error: 'Expected a JSON body (set the webhook content type to application/json)' }, 400);
+  }
+  if (!payload?.pull_request || !payload.repository) return c.json({ error: 'Not a pull_request payload' }, 400);
+  return c.json({ ok: true, ...(await applyPullRequest(c.env.DB, payload)) });
+});
 
 app.all('/api/*', (c) => c.json({ error: 'Not found' }, 404));
 

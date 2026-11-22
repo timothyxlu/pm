@@ -33,7 +33,7 @@ function buildServer(env: Env) {
       instructions:
         'Personal project tracker at pm.timothyxlu.xyz. Issues are identified like BLOG-12 (issues migrated from Linear keep ids like ENG-42). ' +
         'Statuses: backlog, todo, in_progress, in_review, done, canceled. Priority: 0 none, 1 urgent, 2 high, 3 medium, 4 low. ' +
-        'Include the issue identifier in branch names and PR titles (e.g. blog-12-fix-rss) so GitHub activity links automatically.',
+        'Include the issue identifier in branch names and PR titles (e.g. blog-12-fix-rss), or write "Fixes BLOG-12" in the PR description: opening the PR moves the issue to in_progress and merging it moves it to done. Use "Part of BLOG-12" for a PR that should not close the issue.',
     },
   );
 

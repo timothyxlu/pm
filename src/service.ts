@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { findReferences, linkState, PrStage, PullRequestEvent, stageOf } from './github';
 import { Actor, HttpError, PROJECT_STATUSES, STATUSES, Status } from './types';
 
 // Shared business logic. The REST API and the MCP server both call these
@@ -780,4 +781,83 @@ export async function importIssues(db: D1Database, input: ImportIssuesInput, act
   }
   await db.batch(stmts);
   return { project: project.key, created, updated, comments, unresolved_parents: unresolved };
+}
+
+// ---------- GitHub pull requests (webhooks) ----------
+
+/** Status moves for issues a pull request refers to. Only ever moves an issue forward. */
+const PR_MOVES: Record<PrStage, { from: Status[]; to: Status; closingOnly: boolean } | null> = {
+  started: { from: ['backlog', 'todo'], to: 'in_progress', closingOnly: false },
+  review: { from: ['backlog', 'todo', 'in_progress'], to: 'in_review', closingOnly: false },
+  merged: { from: ['backlog', 'todo', 'in_progress', 'in_review'], to: 'done', closingOnly: true },
+  closed: null,
+};
+
+/**
+ * Applies one pull_request webhook event: links the PR to every issue it
+ * refers to (or refreshes the link's title and state) and moves those issues
+ * along. Safe to replay: GitHub redelivers events, and every step only
+ * changes something that is not already in its end state.
+ */
+export async function applyPullRequest(db: D1Database, event: PullRequestEvent) {
+  const pr = event.pull_request;
+  const repo = event.repository.full_name;
+  const refs = findReferences({ branch: pr.head.ref, title: pr.title, body: pr.body });
+  const wanted = [...refs.closing, ...refs.linking];
+  // A PR that dropped a reference keeps its link; refresh it too.
+  const { results: linkedRows } = await db
+    .prepare(
+      `SELECT i.identifier FROM github_links g JOIN issues i ON i.id = g.issue_id
+       WHERE g.repo = ? AND g.kind = 'pr' AND g.number = ? AND i.deleted_at IS NULL`,
+    )
+    .bind(repo, pr.number)
+    .all<{ identifier: string }>();
+  const already = new Set(linkedRows.map((r) => r.identifier));
+  const all = [...new Set([...wanted, ...already])];
+  if (!all.length) return { repo, number: pr.number, issues: [] };
+
+  const { results: issues } = await db
+    .prepare(`SELECT * FROM issues WHERE identifier IN (${all.map(() => '?').join(',')}) AND deleted_at IS NULL`)
+    .bind(...all)
+    .all<IssueRow>();
+
+  const stage = stageOf(event);
+  const move = stage ? PR_MOVES[stage] : null;
+  const state = linkState(event);
+  const url = pr.html_url;
+  const ts = now();
+  const stmts: D1PreparedStatement[] = [];
+  const out: { identifier: string; status: Status; moved_from?: Status }[] = [];
+
+  for (const row of issues) {
+    stmts.push(
+      db
+        .prepare(
+          `INSERT INTO github_links (id, issue_id, repo, kind, number, title, url, state, updated_at)
+           VALUES (?, ?, ?, 'pr', ?, ?, ?, ?, ?)
+           ON CONFLICT (issue_id, repo, kind, number) DO UPDATE SET
+             title = excluded.title, url = excluded.url, state = excluded.state, updated_at = excluded.updated_at`,
+        )
+        .bind(newId(), row.id, repo, pr.number, pr.title, url, state, ts),
+    );
+    if (!already.has(row.identifier)) {
+      stmts.push(await logActivity(db, row.id, 'github', 'linked_github', { repo, kind: 'pr', number: pr.number }));
+    }
+    const referenced = wanted.includes(row.identifier);
+    const closing = refs.closing.includes(row.identifier);
+    if (move && referenced && (closing || !move.closingOnly) && move.from.includes(row.status)) {
+      stmts.push(
+        db
+          .prepare('UPDATE issues SET status = ?, completed_at = ?, updated_at = ? WHERE id = ? AND status = ?')
+          .bind(move.to, move.to === 'done' ? ts : null, ts, row.id, row.status),
+        await logActivity(db, row.id, 'github', 'updated', { status: { from: row.status, to: move.to } }),
+      );
+      out.push({ identifier: row.identifier, status: move.to, moved_from: row.status });
+    } else {
+      stmts.push(db.prepare('UPDATE issues SET updated_at = ? WHERE id = ?').bind(ts, row.id));
+      out.push({ identifier: row.identifier, status: row.status });
+    }
+  }
+  if (stmts.length) await db.batch(stmts);
+  return { repo, number: pr.number, state, issues: out };
 }
