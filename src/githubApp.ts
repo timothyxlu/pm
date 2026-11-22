@@ -90,9 +90,9 @@ export async function startManifest(env: Env) {
   const base = env.PUBLIC_URL;
   const host = new URL(base).hostname;
   const manifest = {
-    // App names are unique across GitHub, so include the host. You can change
-    // it on the confirmation page.
-    name: `MyPM ${host.replace(/\./g, '-')}`.slice(0, 34),
+    // GitHub App names are unique across GitHub. If "MyPM" is taken, GitHub
+    // says so on the confirmation page and you can pick another name there.
+    name: 'MyPM',
     url: base,
     description: `Links pull requests to issues in MyPM (${host}) and moves them like Linear.`,
     hook_attributes: { url: webhookUrl(env), active: true },
