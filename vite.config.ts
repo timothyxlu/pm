@@ -20,14 +20,17 @@ export default defineConfig({
       useCredentials: true,
       includeAssets: ['icon.svg', 'apple-touch-icon.png'],
       manifest: {
-        name: 'pm',
-        short_name: 'pm',
+        name: 'MyPM',
+        short_name: 'MyPM',
         description: 'Projects and issues',
         start_url: '/',
         scope: '/',
         display: 'standalone',
-        background_color: '#F6F6F4',
-        theme_color: '#F6F6F4',
+        // Android takes the system bar colors from the manifest, which has no
+        // dark variant. Use the dark colors: the in-app <meta theme-color>
+        // still switches the top bar to light when the light theme is on.
+        background_color: '#111113',
+        theme_color: '#111113',
         icons: [
           { src: '/icon-192.png', sizes: '192x192', type: 'image/png' },
           { src: '/icon-512.png', sizes: '512x512', type: 'image/png' },

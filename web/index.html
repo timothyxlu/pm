@@ -9,12 +9,21 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <title>pm</title>
+    <title>MyPM</title>
+    <meta name="apple-mobile-web-app-title" content="MyPM" />
     <script>
       // Apply the saved theme before first paint to avoid a flash.
       try {
         var t = localStorage.getItem('pm.theme');
-        if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+        if (t === 'light' || t === 'dark') {
+          document.documentElement.dataset.theme = t;
+          // The app's own theme overrides the system one for the browser bars too.
+          var metas = document.querySelectorAll('meta[name="theme-color"]');
+          for (var i = 0; i < metas.length; i++) {
+            metas[i].removeAttribute('media');
+            metas[i].setAttribute('content', t === 'dark' ? '#111113' : '#F6F6F4');
+          }
+        }
       } catch (e) {}
     </script>
   </head>
