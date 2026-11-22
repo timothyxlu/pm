@@ -10,6 +10,7 @@
   import { i18n } from '../lib/i18n.svelte';
   import { router } from '../lib/router.svelte';
   import { issueOrder, store } from '../lib/store.svelte';
+  import { fly } from 'svelte/transition';
 
   let { key }: { key: string } = $props();
   const t = $derived(i18n.t);
@@ -48,6 +49,34 @@
   });
 
   const PAGE = $derived(media.desktop ? 50 : 8);
+
+  // Mobile board: one status column at a time, picked from tabs or by swiping.
+  const cols = $derived(groups.filter((g) => g.status !== 'canceled'));
+  let active = $state<Status | null>(null);
+  let dir = $state(0);
+  $effect(() => {
+    if (active === null && cols.length) active = (cols.find((g) => g.issues.length) ?? cols[0]).status;
+  });
+  function pick(s: Status) {
+    const a = cols.findIndex((g) => g.status === active);
+    const b = cols.findIndex((g) => g.status === s);
+    dir = b > a ? 1 : b < a ? -1 : 0;
+    active = s;
+  }
+  let sx = 0;
+  let sy = 0;
+  function swipeStart(e: TouchEvent) {
+    sx = e.touches[0].clientX;
+    sy = e.touches[0].clientY;
+  }
+  function swipeEnd(e: TouchEvent) {
+    const dx = e.changedTouches[0].clientX - sx;
+    const dy = e.changedTouches[0].clientY - sy;
+    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    const i = cols.findIndex((g) => g.status === active);
+    const next = cols[i + (dx < 0 ? 1 : -1)];
+    if (next) pick(next.status);
+  }
   const isOpen = (s: string) => expanded[s] ?? true;
 </script>
 
@@ -181,17 +210,40 @@
       </div>
     {/if}
   {:else}
-    <div class="board">
-      {#each groups.filter((g) => g.status !== 'canceled') as g (g.status)}
-        <section class="col">
-          <h2 class="section-title group"><StatusIcon status={g.status} size={14} />{t.statuses[g.status]} · {g.issues.length}</h2>
-          <div class="list">
-            {#each g.issues.slice(0, 50) as issue (issue.id)}
-              <IssueRow {issue} />
-            {/each}
-          </div>
-        </section>
+    {@const cur = cols.find((g) => g.status === active) ?? cols[0]}
+    <div class="mtabs" role="tablist" aria-label={t.board}>
+      {#each cols as g (g.status)}
+        <button
+          role="tab"
+          class="mtab"
+          aria-selected={g.status === cur.status}
+          onclick={() => pick(g.status)}
+          {@attach (el) => { if (g.status === cur.status) el.scrollIntoView({ block: 'nearest', inline: 'center' }); }}
+        >
+          <StatusIcon status={g.status} size={14} />
+          <span>{t.statuses[g.status]}</span>
+          <span class="n">{g.issues.length}</span>
+        </button>
       {/each}
+    </div>
+    <div class="mcol" role="tabpanel" ontouchstart={swipeStart} ontouchend={swipeEnd}>
+      {#key cur.status}
+        <div class="mcol-in" in:fly={{ x: dir * 40, duration: 160 }}>
+          {#if cur.issues.length}
+            <div class="mlist mlist-b">
+              {#each cur.issues.slice(0, limit[cur.status] ?? 50) as issue (issue.id)}
+                <IssueRow {issue} />
+              {/each}
+              {#if cur.issues.length > (limit[cur.status] ?? 50)}
+                <button class="mmore" onclick={() => (limit[cur.status] = (limit[cur.status] ?? 50) + 50)}>{t.showMore(cur.issues.length - (limit[cur.status] ?? 50))}</button>
+              {/if}
+            </div>
+          {:else}
+            <p class="empty">{t.noneYet}</p>
+          {/if}
+          <a class="madd-b" href={`/new?project=${key}&status=${cur.status}`}><Icon name="plus" size={16} />{t.newIssue}</a>
+        </div>
+      {/key}
     </div>
   {/if}
 </div>
@@ -487,17 +539,70 @@
     align-items: center;
     gap: 6px;
   }
-  .board {
+  .mtabs {
+    position: sticky;
+    top: calc(52px + var(--safe-t));
+    z-index: 4;
     display: flex;
-    gap: 12px;
+    gap: 6px;
+    margin: 12px -16px 0;
+    padding: 6px 16px 8px;
     overflow-x: auto;
-    scroll-snap-type: x mandatory;
-    margin: 0 -16px;
-    padding: 0 16px 8px;
+    scrollbar-width: none;
+    background: var(--bg);
   }
-  .col {
-    flex: 0 0 82%;
-    max-width: 320px;
-    scroll-snap-align: start;
+  .mtabs::-webkit-scrollbar {
+    display: none;
+  }
+  .mtab {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 36px;
+    padding: 0 12px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--muted);
+    font: inherit;
+    font-size: 14px;
+    white-space: nowrap;
+  }
+  .mtab .n {
+    color: var(--faint);
+    font-variant-numeric: tabular-nums;
+  }
+  .mtab[aria-selected='true'] {
+    border-color: transparent;
+    background: var(--accent-soft);
+    color: var(--accent-text);
+    font-weight: 600;
+  }
+  .mtab[aria-selected='true'] .n {
+    color: inherit;
+  }
+  .mcol {
+    min-height: 50vh;
+    touch-action: pan-y;
+  }
+  .mlist-b {
+    margin-top: 4px;
+  }
+  .mlist-b > :global(.row + .row) {
+    border-top: 1px solid var(--line);
+  }
+  .madd-b {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 44px;
+    margin-top: 10px;
+    border: 1px dashed var(--line);
+    border-radius: var(--radius);
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 14px;
   }
 </style>

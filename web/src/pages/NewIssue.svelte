@@ -8,7 +8,8 @@
   import { router } from '../lib/router.svelte';
   import { store } from '../lib/store.svelte';
 
-  let { project: initialProject, parent, modal = false }: { project?: string; parent?: string; modal?: boolean } = $props();
+  let { project: initialProject, parent, status: initialStatus, modal = false }: { project?: string; parent?: string; status?: string; modal?: boolean } = $props();
+  const STATUSES: Status[] = ['backlog', 'todo', 'in_progress', 'in_review', 'done', 'canceled'];
   const t = $derived(i18n.t);
 
   const activeProjects = $derived(store.projectList.filter((p) => p.status !== 'archived'));
@@ -17,7 +18,7 @@
   let project = $state(startProject());
   let title = $state('');
   let description = $state('');
-  let fields = $state({ status: 'todo' as Status, priority: 0, labels: [] as string[], due_date: null as string | null });
+  let fields = $state({ status: (STATUSES.includes(initialStatus as Status) ? initialStatus : 'todo') as Status, priority: 0, labels: [] as string[], due_date: null as string | null });
   let picking = $state(false);
   let busy = $state(false);
   let more = $state(false);

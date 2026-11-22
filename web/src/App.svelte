@@ -47,13 +47,13 @@
     {:else if page.name === 'issue'}
       {#key page.id}<IssuePage id={page.id} />{/key}
     {:else if page.name === 'new'}
-      <NewIssue project={page.project} parent={page.parent} />
+      <NewIssue project={page.project} parent={page.parent} status={page.status} />
     {:else}
       <Home />
     {/if}
   </main>
   {#if modal && r.name === 'new'}
-    {#key `${r.project}|${r.parent}`}<NewIssue project={r.project} parent={r.parent} modal />{/key}
+    {#key `${r.project}|${r.parent}|${r.status}`}<NewIssue project={r.project} parent={r.parent} status={r.status} modal />{/key}
   {/if}
   {#if withNav && !media.desktop}<BottomNav />{/if}
 </div>
