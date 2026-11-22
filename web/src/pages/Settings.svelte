@@ -166,29 +166,38 @@
 
   <section>
     <h2 class="section-title">{t.connections} · {t.github}</h2>
-    <p class="hint note top">{t.githubNote}</p>
-    {#if ghNotice}<p class="ok">{ghNotice}</p>{/if}
-    {#if gh?.connected && gh.app}
+    {#if gh}
       <div class="list">
         <div class="tokrow">
+          <Icon name="github" size={20} />
           <div class="tokinfo">
-            <span>{t.githubApp(gh.app.name)}</span>
-            <span class="sub" class:warn={!gh.installed}>{gh.installed ? t.githubInstalled : t.githubNotInstalled}</span>
+            {#if gh.connected && gh.app}
+              <span>{t.githubApp(gh.app.name)}</span>
+              <span class="sub" class:warn={!gh.installed}>{gh.installed ? t.githubInstalled : t.githubNotInstalled}</span>
+            {:else}
+              <span>GitHub</span>
+              <span class="sub">{t.githubNote}</span>
+            {/if}
           </div>
-          <a class="btn" class:primary={!gh.installed} href={gh.installed && gh.installation_url ? gh.installation_url : gh.app.install_url} target="_blank" rel="noopener">
-            {gh.installed ? t.githubManageRepos : t.githubInstall}
-          </a>
+          {#if gh.connected && gh.app}
+            <a class="btn" class:primary={!gh.installed} href={gh.installed && gh.installation_url ? gh.installation_url : gh.app.install_url} target="_blank" rel="noopener">
+              {gh.installed ? t.githubManageRepos : t.githubInstall}
+            </a>
+          {:else}
+            <button class="btn primary" onclick={connectGithub} disabled={ghBusy}>{ghBusy ? t.githubConnecting : t.connectGithub}</button>
+          {/if}
         </div>
       </div>
-      <div class="ghlinks">
-        <a class="hint" href={gh.app.settings_url} target="_blank" rel="noopener">{t.githubAppSettings}</a>
-        <button class="btn danger" onclick={disconnectGithub} onblur={() => (ghConfirm = false)}>
-          {ghConfirm ? t.githubDisconnectConfirm : t.githubDisconnect}
-        </button>
-      </div>
-    {:else if gh}
-      <button class="btn primary" onclick={connectGithub} disabled={ghBusy}>{ghBusy ? t.githubConnecting : t.connectGithub}</button>
+      {#if gh.connected && gh.app}
+        <div class="ghlinks">
+          <a class="hint" href={gh.app.settings_url} target="_blank" rel="noopener">{t.githubAppSettings}</a>
+          <button class="linkbtn" onclick={disconnectGithub} onblur={() => (ghConfirm = false)}>
+            {ghConfirm ? t.githubDisconnectConfirm : t.githubDisconnect}
+          </button>
+        </div>
+      {/if}
     {/if}
+    {#if ghNotice}<p class="hint note">{ghNotice}</p>{/if}
     {#if ghError}<p class="error">{ghError}</p>{/if}
   </section>
 
@@ -348,15 +357,18 @@
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    margin-top: 10px;
+    margin: 8px 2px 0;
+    font-size: 13px;
   }
   .warn {
     color: var(--danger);
   }
-  .ok {
-    color: var(--accent-text);
-    font-size: 14px;
-    margin: 0 2px 10px;
+  .linkbtn {
+    border: 0;
+    background: none;
+    padding: 4px 2px;
+    font-size: 13px;
+    color: var(--danger);
   }
   a.btn {
     display: inline-flex;
