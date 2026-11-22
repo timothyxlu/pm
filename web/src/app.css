@@ -25,6 +25,11 @@
   --nav-h: 56px;
   --safe-b: env(safe-area-inset-bottom, 0px);
   --safe-t: env(safe-area-inset-top, 0px);
+  --sidebar-w: 236px;
+  --sidebar-bg: #efefec;
+  --hover: rgb(0 0 0 / 0.035);
+  --selected: rgb(79 70 229 / 0.09);
+  --line-soft: #efefec;
   color-scheme: light;
 }
 
@@ -47,6 +52,10 @@
     --st-in_review: #22c55e;
     --st-done: #818cf8;
     --shadow: none;
+    --sidebar-bg: #161619;
+    --hover: rgb(255 255 255 / 0.04);
+    --selected: rgb(129 140 248 / 0.14);
+    --line-soft: #242428;
     color-scheme: dark;
   }
 }
@@ -68,6 +77,10 @@
   --st-in_review: #22c55e;
   --st-done: #818cf8;
   --shadow: none;
+  --sidebar-bg: #161619;
+  --hover: rgb(255 255 255 / 0.04);
+  --selected: rgb(129 140 248 / 0.14);
+  --line-soft: #242428;
   color-scheme: dark;
 }
 
@@ -328,4 +341,218 @@ textarea.input {
   border-left: 3px solid var(--line-strong);
   padding-left: 10px;
   color: var(--muted);
+}
+
+/* ---------- desktop (keep 960px in step with lib/media.svelte.ts) ---------- */
+kbd {
+  font: 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+@media (min-width: 960px) {
+  body {
+    font-size: 14px;
+  }
+  .shell.desktop > main {
+    margin-left: var(--sidebar-w);
+    min-height: 100dvh;
+  }
+  .shell.desktop .page {
+    max-width: 720px;
+    padding: 8px 32px 64px;
+  }
+  .shell.desktop .page {
+    margin-top: 16px;
+  }
+  .shell.desktop .topbar {
+    margin: 0;
+  }
+  .btn {
+    height: 34px;
+    padding: 0 14px;
+    border-radius: 8px;
+    font-size: 13.5px;
+  }
+  .input {
+    min-height: 36px;
+    border-radius: 8px;
+    padding: 7px 11px;
+    font-size: 14px;
+  }
+  .chip {
+    height: 30px;
+    border-radius: 8px;
+    padding: 0 10px;
+  }
+  .icon-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+  }
+}
+@media (hover: hover) {
+  .btn:not(:disabled):hover {
+    border-color: var(--line-strong);
+  }
+  .btn.primary:not(:disabled):hover {
+    filter: brightness(1.08);
+  }
+  .chip:hover,
+  .icon-btn:hover {
+    background: var(--hover);
+  }
+  .chip:hover {
+    border-color: var(--line-strong);
+  }
+}
+
+/* desktop page frame: a sticky header bar over full-width content */
+.dpage {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+.dhead {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 52px;
+  padding: 0 24px;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+.dhead h1 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  white-space: nowrap;
+}
+.dhead .spacer {
+  flex: 1;
+}
+.dbody {
+  padding: 24px 32px 64px;
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+}
+.dlist {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  /* clip, not hidden: hidden would make the list a scroller and break the sticky group headers */
+  overflow: clip;
+}
+[data-row] {
+  scroll-margin: 100px 0 24px;
+}
+.dlist > :last-child {
+  border-bottom: 0;
+}
+.dgroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 14px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+  position: sticky;
+  top: 52px;
+  z-index: 2;
+}
+.dgroup .n {
+  color: var(--faint);
+  font-weight: 500;
+}
+.dgroup button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+.dgroup button:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+.dsection {
+  margin: 28px 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dsection:first-child {
+  margin-top: 0;
+}
+.seg-d {
+  display: flex;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 2px;
+}
+.seg-d button {
+  height: 26px;
+  padding: 0 10px;
+  border: 0;
+  background: transparent;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.seg-d button[aria-pressed='true'] {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
+}
+.hbtn {
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.hbtn:hover {
+  border-color: var(--line-strong);
+}
+.hbtn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.hbtn.primary:hover {
+  filter: brightness(1.08);
+}
+.hbtn kbd {
+  opacity: 0.7;
 }

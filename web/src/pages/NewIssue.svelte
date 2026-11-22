@@ -8,7 +8,7 @@
   import { router } from '../lib/router.svelte';
   import { store } from '../lib/store.svelte';
 
-  let { project: initialProject, parent }: { project?: string; parent?: string } = $props();
+  let { project: initialProject, parent, modal = false }: { project?: string; parent?: string; modal?: boolean } = $props();
   const t = $derived(i18n.t);
 
   const activeProjects = $derived(store.projectList.filter((p) => p.status !== 'archived'));
@@ -46,6 +46,14 @@
 
   const nextId = $derived(store.projects[project] ? `${project}-${store.projects[project].next_number}` : '');
 
+  const close = () => router.back(project ? `/p/${project}` : '/');
+  function cmdEnter(e: KeyboardEvent) {
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      submit();
+    }
+  }
+
   async function submit(e?: Event) {
     e?.preventDefault();
     if (!title.trim() || !project || busy) return;
@@ -76,6 +84,49 @@
   }
 </script>
 
+{#if modal}
+  <dialog
+    class="newdlg"
+    aria-label={t.newIssue}
+    {@attach (d: HTMLDialogElement) => d.showModal()}
+    oncancel={(e) => {
+      e.preventDefault();
+      close();
+    }}
+    onclick={(e) => {
+      if (e.target === e.currentTarget) close();
+    }}
+  >
+    <form class="dform" onsubmit={submit}>
+      <header class="dbar">
+        <button type="button" class="pchip" onclick={() => (picking = true)} disabled={!!parent}>
+          {#if store.projects[project]}<span class="mono">{project}</span>{store.projects[project].name}{:else}{t.chooseProject}{/if}
+        </button>
+        <Icon name="arrow" size={12} />
+        <span class="dtitle-sm">{t.newIssue}</span>
+        {#if parent}
+          <span class="dparent"><Icon name="parent" size={13} />{t.parent} <b class="mono">{parent.toUpperCase()}</b>{#if parentIssue}<span class="ellipsis">{parentIssue.title}</span>{/if}</span>
+        {/if}
+        <span class="spacer"></span>
+        <button type="button" class="xbtn" onclick={close} aria-label={t.cancel}><Icon name="x" size={16} /></button>
+      </header>
+      <!-- svelte-ignore a11y_autofocus (the dialog opens to type a title) -->
+      <input class="dtitle" bind:value={title} placeholder={t.title} aria-label={t.title} required autocomplete="off" autofocus onkeydown={cmdEnter} />
+      <textarea class="ddesc" rows="6" bind:value={description} placeholder={t.descriptionPlaceholder} aria-label={t.description} onkeydown={cmdEnter}></textarea>
+      <div class="dfields">
+        <IssueFields {...fields} onchange={(p) => (fields = { ...fields, ...p })} />
+      </div>
+      {#if error}<p class="error" role="alert">{error}</p>{/if}
+      <footer class="dfoot">
+        {#if nextId}<span class="hint">{t.willCreateAs(nextId)}</span>{/if}
+        {#if !activeProjects.length && store.loaded}<span class="hint">{t.noProjects}</span>{/if}
+        <span class="spacer"></span>
+        <button type="button" class="btn" onclick={close}>{t.cancel}</button>
+        <button type="submit" class="btn primary" disabled={busy || !title.trim() || !project}>{t.create} <kbd>⌘↵</kbd></button>
+      </footer>
+    </form>
+  </dialog>
+{:else}
 <form class="page plain" onsubmit={submit} aria-label={t.newIssue}>
   <header class="bar">
     <button type="button" class="text-btn" onclick={() => router.back(project ? `/p/${project}` : '/')}>{t.cancel}</button>
@@ -106,7 +157,7 @@
   </div>
   <div class="field">
     <label for="desc">{t.descriptionHint}</label>
-    <textarea id="desc" class="input" rows="5" bind:value={description} placeholder={t.descriptionPlaceholder}></textarea>
+    <textarea id="desc" class="input" rows="5" bind:value={description} placeholder={t.descriptionPlaceholder} onkeydown={cmdEnter}></textarea>
   </div>
 
   <div class="chips">
@@ -124,6 +175,7 @@
   {#if !activeProjects.length && store.loaded}<p class="hint">{t.noProjects}</p>{/if}
   {#if error}<p class="error" role="alert">{error}</p>{/if}
 </form>
+{/if}
 
 <Sheet bind:open={picking} title={t.project}>
   <OptionList
@@ -139,6 +191,127 @@
 </Sheet>
 
 <style>
+  .newdlg {
+    margin: 10vh auto auto;
+    padding: 0;
+    border: 0;
+    width: min(720px, calc(100vw - 48px));
+    background: transparent;
+    color: var(--ink);
+    overflow: visible;
+  }
+  .newdlg::backdrop {
+    background: rgb(0 0 0 / 0.3);
+  }
+  .newdlg[open] {
+    animation: pop 0.12s ease-out;
+  }
+  @keyframes pop {
+    from {
+      transform: scale(0.98);
+      opacity: 0;
+    }
+  }
+  .dform {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    box-shadow: 0 16px 48px rgb(0 0 0 / 0.22);
+    padding: 14px 18px 14px;
+    display: flex;
+    flex-direction: column;
+  }
+  .dbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--muted);
+    min-width: 0;
+  }
+  .pchip {
+    height: 26px;
+    padding: 0 8px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: var(--surface-2);
+    font-size: 12.5px;
+    font-weight: 600;
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .pchip .mono {
+    color: var(--muted);
+  }
+  .dtitle-sm {
+    color: var(--ink-2);
+  }
+  .dparent {
+    display: inline-flex;
+    gap: 5px;
+    align-items: center;
+    min-width: 0;
+    margin-left: 6px;
+  }
+  .spacer {
+    flex: 1;
+  }
+  .xbtn {
+    width: 28px;
+    height: 28px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+  }
+  .xbtn:hover {
+    background: var(--hover);
+    color: var(--ink);
+  }
+  .dtitle {
+    border: 0;
+    outline: none;
+    background: transparent;
+    font-size: 20px;
+    font-weight: 600;
+    padding: 14px 0 6px;
+  }
+  .ddesc {
+    border: 0;
+    outline: none;
+    background: transparent;
+    resize: vertical;
+    font-size: 14px;
+    line-height: 1.55;
+    padding: 4px 0 10px;
+    min-height: 96px;
+  }
+  .dtitle::placeholder,
+  .ddesc::placeholder {
+    color: var(--faint);
+  }
+  .dfields {
+    padding: 6px 0 12px;
+  }
+  .dfoot {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-top: 1px solid var(--line);
+    padding-top: 12px;
+    margin: 0 -18px;
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+  .dfoot kbd {
+    opacity: 0.75;
+    margin-left: 4px;
+  }
   .bar {
     display: flex;
     align-items: center;

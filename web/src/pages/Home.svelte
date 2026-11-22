@@ -1,6 +1,10 @@
 <script lang="ts">
   import Icon from '../components/Icon.svelte';
+  import IssueLine from '../components/IssueLine.svelte';
   import IssueRow from '../components/IssueRow.svelte';
+  import StatusIcon from '../components/StatusIcon.svelte';
+  import { keys } from '../lib/keys.svelte';
+  import { media } from '../lib/media.svelte';
   import ProjectForm from '../components/ProjectForm.svelte';
   import { fmtLongDate, i18n } from '../lib/i18n.svelte';
   import { issueOrder, store } from '../lib/store.svelte';
@@ -20,6 +24,79 @@
   const working = $derived(store.live.filter((i) => i.status === 'in_progress').sort(issueOrder));
 </script>
 
+{#if media.desktop}
+<div class="dpage">
+  <header class="dhead">
+    <h1>{t.overview}</h1>
+    <span class="today">{fmtLongDate(new Date())}</span>
+    <span class="spacer"></span>
+    <button class="hbtn" onclick={() => (creating = true)}><Icon name="plus" size={14} />{t.newProject}</button>
+    <a class="hbtn primary" href={keys.newIssueHref()}><Icon name="plus" size={14} />{t.newIssue}<kbd>C</kbd></a>
+  </header>
+  <div class="dbody">
+    <div class="dstats">
+      <div class="dstat"><span class="lbl">{t.doneThisWeek}</span><span class="n mono">{stats.done}</span></div>
+      <div class="dstat"><span class="lbl"><StatusIcon status="in_progress" size={13} />{t.inProgress}</span><span class="n mono">{stats.inProgress}</span></div>
+      <div class="dstat"><span class="lbl"><StatusIcon status="in_review" size={13} />{t.inReview}</span><span class="n mono">{stats.inReview}</span></div>
+      <div class="dstat"><span class="lbl">{t.projects}</span><span class="n mono">{store.projectList.filter((p) => p.status === 'active').length}</span></div>
+    </div>
+
+    <h2 class="dsection">
+      {t.projects}
+      <span class="spacer"></span>
+      {#if archivedCount > 0}
+        <button class="minilink" onclick={() => (showArchived = !showArchived)}>
+          {showArchived ? t.hide : `${t.showArchived} (${archivedCount})`}
+        </button>
+      {/if}
+    </h2>
+    {#if store.loaded && projects.length === 0 && !store.syncing}
+      <p class="empty">{t.noProjects}</p>
+    {:else}
+      <div class="dlist ptable">
+        <div class="prow phead">
+          <span>{t.name}</span>
+          <span>{t.progress}</span>
+          <span class="num">{t.statuses.in_progress}</span>
+          <span class="num">{t.statuses.in_review}</span>
+          <span class="num">{t.statuses.todo}</span>
+          <span class="num">{t.statuses.backlog}</span>
+          <span class="num">{t.statuses.done}</span>
+        </div>
+        {#each projects as p (p.key)}
+          {@const c = store.counts(p.key)}
+          <a class="prow" href={`/p/${p.key}`} class:dim={p.status !== 'active'} data-row>
+            <span class="pcell">
+              <span class="pkey mono">{p.key}</span>
+              <span class="pname">{p.name}</span>
+              {#if p.status !== 'active'}<span class="tag">{t.projectStatus[p.status]}</span>{/if}
+              {#if p.description}<span class="pdesc">{p.description}</span>{/if}
+            </span>
+            <span class="pprog">
+              <span class="bar"><span style:width={`${c.progress * 100}%`}></span></span>
+              <span class="mono pct">{Math.round(c.progress * 100)}%</span>
+            </span>
+            <span class="num mono" class:zero={!c.counts.in_progress}>{c.counts.in_progress}</span>
+            <span class="num mono" class:zero={!c.counts.in_review}>{c.counts.in_review}</span>
+            <span class="num mono" class:zero={!c.counts.todo}>{c.counts.todo}</span>
+            <span class="num mono" class:zero={!c.counts.backlog}>{c.counts.backlog}</span>
+            <span class="num mono">{c.counts.done}<span class="of">/{c.total}</span></span>
+          </a>
+        {/each}
+      </div>
+    {/if}
+
+    {#if working.length}
+      <h2 class="dsection">{t.workingOn} <span class="n">{working.length}</span></h2>
+      <div class="dlist">
+        {#each working as issue (issue.id)}
+          <IssueLine {issue} showProject />
+        {/each}
+      </div>
+    {/if}
+  </div>
+</div>
+{:else}
 <div class="page">
   <header class="head">
     <div>
@@ -83,10 +160,154 @@
     </div>
   {/if}
 </div>
+{/if}
 
 <ProjectForm bind:open={creating} />
 
 <style>
+  .today {
+    font-size: 13px;
+    color: var(--faint);
+  }
+  .spacer {
+    flex: 1;
+  }
+  .dstats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+  }
+  .dstat {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .dstat .lbl {
+    font-size: 12.5px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .dstat .n {
+    font-size: 26px;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.02em;
+  }
+  .dsection .n {
+    color: var(--faint);
+    font-weight: 500;
+  }
+  .minilink {
+    border: 0;
+    background: transparent;
+    color: var(--accent-text);
+    font-size: 12.5px;
+    font-weight: 600;
+    padding: 2px 4px;
+  }
+  .prow {
+    display: grid;
+    grid-template-columns: minmax(240px, 1fr) 200px repeat(5, 72px);
+    align-items: center;
+    gap: 12px;
+    min-height: 48px;
+    padding: 6px 16px;
+    border-bottom: 1px solid var(--line-soft);
+    color: var(--ink);
+    font-size: 13.5px;
+    outline: none;
+  }
+  a.prow:hover {
+    background: var(--hover);
+  }
+  a.prow:focus-visible {
+    background: var(--selected);
+    box-shadow: inset 2px 0 0 var(--accent);
+  }
+  .phead {
+    min-height: 34px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--faint);
+    background: var(--surface-2);
+  }
+  .prow.dim {
+    opacity: 0.6;
+  }
+  .pcell {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+  .pkey {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted);
+    min-width: 44px;
+    height: 20px;
+    padding: 0 5px;
+    border-radius: 5px;
+    border: 1px solid var(--line);
+    background: var(--surface-2);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .prow .pname {
+    font-weight: 600;
+    font-size: 14px;
+    white-space: nowrap;
+  }
+  .pdesc {
+    color: var(--faint);
+    font-size: 12.5px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    min-width: 0;
+  }
+  .pprog {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .pprog .bar {
+    flex: 1;
+    height: 6px;
+    border-radius: 3px;
+    background: var(--surface-2);
+    overflow: hidden;
+    display: block;
+  }
+  .pprog .bar span {
+    display: block;
+    height: 100%;
+    background: var(--accent);
+    border-radius: 3px;
+  }
+  .pct {
+    width: 36px;
+    text-align: right;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .num {
+    text-align: right;
+  }
+  .num.zero {
+    color: var(--faint);
+  }
+  .of {
+    color: var(--faint);
+  }
   .head {
     display: flex;
     align-items: flex-end;
@@ -97,7 +318,7 @@
     font-size: 13px;
     color: var(--muted);
   }
-  h1 {
+  .head h1 {
     margin: 2px 0 0;
     font-size: 28px;
     font-weight: 700;

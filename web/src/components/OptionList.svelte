@@ -9,7 +9,18 @@
   }: { options: T[]; selected: T; onpick: (v: T) => void; item: Snippet<[T]> } = $props();
 </script>
 
-<div class="opts" role="listbox">
+<div
+  class="opts"
+  role="listbox"
+  tabindex="-1"
+  onkeydown={(e) => {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    e.preventDefault();
+    const opts = [...e.currentTarget.querySelectorAll<HTMLElement>('.opt')];
+    const at = opts.indexOf(document.activeElement as HTMLElement);
+    opts[(at + (e.key === 'ArrowDown' ? 1 : -1) + opts.length) % opts.length]?.focus();
+  }}
+>
   {#each options as o}
     <button type="button" role="option" aria-selected={o === selected} class="opt" onclick={() => onpick(o)}>
       <span class="label">{@render item(o)}</span>
@@ -33,6 +44,15 @@
     text-align: left;
     padding: 0 4px;
     border-radius: 10px;
+  }
+  .opt:focus-visible {
+    outline: none;
+    background: var(--selected);
+  }
+  @media (hover: hover) {
+    .opt:hover {
+      background: var(--hover);
+    }
   }
   .opt:active {
     background: var(--surface-2);

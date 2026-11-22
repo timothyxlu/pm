@@ -37,6 +37,8 @@ npm run smoke:oauth                       # end-to-end OAuth flow for MCP
 - Works offline for reading: the service worker caches the app shell. Changes need a connection for now.
 - When the Access session expires, a banner links to `/login`, which Access sends through sign-in and the Worker redirects back to `/`.
 - Language follows the system and can be switched in Settings. Theme likewise.
+- Two layouts from one codebase: below 960px wide it is the mobile PWA (bottom tabs, sheets); from 960px it switches to a desktop layout with a sidebar, dense one-line issue lists, a two-column issue page with a properties panel, a new-issue dialog and a ⌘K command palette (`web/src/lib/media.svelte.ts` holds the breakpoint).
+- Keyboard: `⌘K` or `/` search and jump, `C` new issue, `J`/`K` move through lists, `Enter` open, `G` then `H`/`A`/`S` go to overview/active/settings; on an issue `S`/`P`/`L`/`D` set status/priority/labels/due date, `E` edits the title, `Esc` goes back; `?` lists them all.
 
 ## Deploy
 

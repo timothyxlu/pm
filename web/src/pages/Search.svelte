@@ -1,6 +1,9 @@
 <script lang="ts">
   import Icon from '../components/Icon.svelte';
+  import IssueLine from '../components/IssueLine.svelte';
   import IssueRow from '../components/IssueRow.svelte';
+  import { media } from '../lib/media.svelte';
+  import { searchIssues } from '../lib/search';
   import { i18n } from '../lib/i18n.svelte';
   import { store } from '../lib/store.svelte';
 
@@ -21,31 +24,36 @@
     } catch {}
   });
 
-  const results = $derived.by(() => {
-    const terms = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    if (!terms.length) return [];
-    const scored = [];
-    for (const i of store.live) {
-      const id = i.identifier.toLowerCase();
-      const title = i.title.toLowerCase();
-      const hay = `${id} ${title} ${(i.description ?? '').toLowerCase()} ${i.labels.join(' ').toLowerCase()}`;
-      if (!terms.every((term) => hay.includes(term))) continue;
-      let score = 0;
-      for (const term of terms) {
-        if (id === term) score += 100;
-        else if (id.startsWith(term)) score += 20;
-        if (title.includes(term)) score += 10;
-      }
-      if (i.status === 'done' || i.status === 'canceled') score -= 5;
-      scored.push({ i, score });
-    }
-    return scored
-      .sort((a, b) => b.score - a.score || b.i.updated_at.localeCompare(a.i.updated_at))
-      .slice(0, 100)
-      .map((s) => s.i);
-  });
+  const results = $derived(searchIssues(store.live, q));
 </script>
 
+{#if media.desktop}
+<div class="dpage">
+  <header class="dhead">
+    <div class="dbox">
+      <Icon name="search" size={16} />
+      <input
+        type="search"
+        bind:value={q}
+        placeholder={t.searchPlaceholder}
+        aria-label={t.search}
+        autocomplete="off"
+        {@attach (el) => el.focus()}
+      />
+      {#if results.length}<span class="cnt mono">{results.length}</span>{/if}
+    </div>
+  </header>
+  <div class="dbody">
+    {#if results.length}
+      <div class="dlist">
+        {#each results as issue (issue.id)}<IssueLine {issue} showProject />{/each}
+      </div>
+    {:else if q.trim()}
+      <p class="empty">{t.noResults}</p>
+    {/if}
+  </div>
+</div>
+{:else}
 <div class="page">
   <div class="box">
     <Icon name="search" size={18} />
@@ -69,8 +77,24 @@
     <p class="empty">{t.noResults}</p>
   {/if}
 </div>
+{/if}
 
 <style>
+  .dbox {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--muted);
+    height: 100%;
+  }
+  .dbox input {
+    font-size: 15px;
+  }
+  .cnt {
+    font-size: 12px;
+    color: var(--faint);
+  }
   .box {
     position: sticky;
     top: calc(var(--safe-t) + 8px);

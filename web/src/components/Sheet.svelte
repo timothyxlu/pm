@@ -43,6 +43,9 @@
     background: transparent;
     color: var(--ink);
   }
+  dialog:focus-visible {
+    outline: none;
+  }
   dialog::backdrop {
     background: rgb(0 0 0 / 0.35);
   }
@@ -68,6 +71,34 @@
     border-radius: 2px;
     background: var(--line-strong);
     margin: 0 auto 8px;
+  }
+  /* Wide screens: a centered dialog instead of a bottom sheet. */
+  @media (min-width: 960px) {
+    dialog {
+      margin: 14vh auto auto;
+      max-width: 460px;
+      width: calc(100% - 32px);
+      max-height: 72vh;
+    }
+    dialog[open] {
+      animation: pop 0.12s ease-out;
+    }
+    .sheet {
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      box-shadow: 0 16px 48px rgb(0 0 0 / 0.2);
+      padding: 16px 20px 20px;
+      max-height: 72vh;
+    }
+    .grip {
+      display: none;
+    }
+  }
+  @keyframes pop {
+    from {
+      transform: scale(0.98);
+      opacity: 0;
+    }
   }
   h2 {
     font-size: 15px;

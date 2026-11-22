@@ -13,7 +13,7 @@
   );
 </script>
 
-<a class="row" href={`/i/${issue.identifier}`}>
+<a class="row" href={`/i/${issue.identifier}`} data-row>
   <StatusIcon status={issue.status} />
   <div class="body">
     <div class="meta">
