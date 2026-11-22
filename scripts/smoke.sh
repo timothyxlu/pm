@@ -40,6 +40,32 @@ prog=$(curl -sf "${H[@]}" "$BASE/api/v1/projects/$KEY" | j .progress)
 code=$(curl -s -o /dev/null -w '%{http_code}' "${H[@]}" "$BASE/api/v1/tokens")
 [ "$code" = 403 ] || fail "tokens must be refused for token auth, got $code"
 
+# GitHub webhook (needs GITHUB_WEBHOOK_SECRET=smoke-secret in .dev.vars)
+WH_SECRET=${WH_SECRET:-smoke-secret}
+gh_post() { # event, json
+  local sig; sig=$(printf '%s' "$2" | openssl dgst -sha256 -hmac "$WH_SECRET" -r | cut -d' ' -f1)
+  curl -s -H 'Content-Type: application/json' -H "X-GitHub-Event: $1" -H "X-Hub-Signature-256: sha256=$sig" -X POST "$BASE/webhooks/github" -d "$2"
+}
+code=$(curl -s -o /dev/null -w '%{http_code}' -H 'X-GitHub-Event: ping' -H 'X-Hub-Signature-256: sha256=00' -X POST "$BASE/webhooks/github" -d '{}')
+[ "$code" = 401 ] || fail "webhook with bad signature should be 401, got $code"
+gh_post ping '{"zen":"hi"}' | grep -q pong || fail "webhook ping"
+w1=$(curl -sf "${H[@]}" -X POST "$BASE/api/v1/issues" -d "{\"project\":\"$KEY\",\"title\":\"Webhook target\"}" | j .identifier)
+w2=$(curl -sf "${H[@]}" -X POST "$BASE/api/v1/issues" -d "{\"project\":\"$KEY\",\"title\":\"Webhook partial\"}" | j .identifier)
+lw1=$(echo "$w1" | tr 'A-Z' 'a-z')
+pr() { # action, state, merged
+  echo "{\"action\":\"$1\",\"repository\":{\"full_name\":\"timothyxlu/smoke\"},\"pull_request\":{\"number\":7,\"html_url\":\"https://github.com/timothyxlu/smoke/pull/7\",\"title\":\"Smoke PR\",\"body\":\"Part of $w2\",\"state\":\"$2\",\"draft\":false,\"merged\":$3,\"head\":{\"ref\":\"claude/$lw1-smoke\"}}}"
+}
+gh_post pull_request "$(pr opened open false)" >/dev/null
+[ "$(curl -sf "${H[@]}" "$BASE/api/v1/issues/$w1" | j .status)" = in_progress ] || fail "PR opened should start $w1"
+[ "$(curl -sf "${H[@]}" "$BASE/api/v1/issues/$w2" | j .status)" = in_progress ] || fail "PR opened should start $w2"
+gh_post pull_request "$(pr closed closed true)" >/dev/null
+gh_post pull_request "$(pr closed closed true)" >/dev/null   # redelivery is harmless
+d1=$(curl -sf "${H[@]}" "$BASE/api/v1/issues/$w1")
+[ "$(echo "$d1" | j .status)" = done ] || fail "PR merged should close $w1"
+[ "$(echo "$d1" | j .github[0].state)" = merged ] || fail "link state should be merged"
+[ "$(echo "$d1" | j .activity[0].actor)" = github ] || fail "webhook actor should be github"
+[ "$(curl -sf "${H[@]}" "$BASE/api/v1/issues/$w2" | j .status)" = in_progress ] || fail "'Part of' must not close $w2"
+
 # MCP over Streamable HTTP
 M=(-H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream')
 init=$(curl -sf "${M[@]}" -X POST "$BASE/mcp" -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"smoke","version":"0"}}}')
