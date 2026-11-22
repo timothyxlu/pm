@@ -183,6 +183,7 @@
             {#if gh.connected && gh.app}
               <span>{t.githubApp(gh.app.name)}</span>
               <span class="sub" class:warn={!gh.installed && !ghRepos?.selection}>
+                {#if gh.accounts?.length}{gh.accounts.join(', ')} · {/if}
                 {#if ghRepos?.selection === 'all'}{t.githubAllRepos(ghRepos.repos.length)}
                 {:else if ghRepos?.selection}{t.githubSomeRepos(ghRepos.repos.length)}
                 {:else if ghReposFailed}{t.githubReposError}
@@ -194,7 +195,7 @@
             {/if}
           </div>
           {#if gh.connected && gh.app}
-            <a class="btn" class:primary={!gh.installed} href={gh.installed && gh.installation_url ? gh.installation_url : gh.app.install_url} target="_blank" rel="noopener">
+            <a class="btn" class:primary={!gh.installed} href={gh.app.install_url} target="_blank" rel="noopener">
               {gh.installed ? t.githubManageRepos : t.githubInstall}
             </a>
           {:else}

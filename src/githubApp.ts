@@ -30,8 +30,26 @@ export interface GithubApp {
   client_secret: string;
   webhook_secret: string;
   pem: string;
+  /** Legacy single installation; superseded by `installations`. */
   installation_id: number | null;
+  /** Where the app is installed: your account and any organizations. */
+  installations?: Installation[];
   created_at: string;
+}
+
+export interface Installation {
+  id: number;
+  account: string;
+}
+
+export function installsOf(app: GithubApp): Installation[] {
+  if (app.installations) return app.installations;
+  return app.installation_id != null ? [{ id: app.installation_id, account: app.owner ?? '' }] : [];
+}
+
+/** The app is public so it can go on organizations too; only installs you made count. */
+export function isOurInstallation(app: GithubApp, id: number) {
+  return installsOf(app).some((i) => i.id === id);
 }
 
 /** What the browser is allowed to see. */
@@ -39,7 +57,7 @@ export interface GithubAppStatus {
   connected: boolean;
   app?: { name: string; slug: string; html_url: string; owner: string | null; settings_url: string; install_url: string };
   installed?: boolean;
-  installation_url?: string | null;
+  accounts?: string[];
   webhook_url: string;
 }
 
@@ -77,8 +95,8 @@ export function status(env: Env, app: GithubApp | null): GithubAppStatus {
       settings_url: `https://github.com/settings/apps/${app.slug}`,
       install_url: `${app.html_url}/installations/new`,
     },
-    installed: app.installation_id != null,
-    installation_url: app.installation_id != null ? `https://github.com/settings/installations/${app.installation_id}` : null,
+    installed: installsOf(app).length > 0,
+    accounts: installsOf(app).map((i) => i.account),
     webhook_url: webhookUrl(env),
   };
 }
@@ -99,7 +117,9 @@ export async function startManifest(env: Env) {
     redirect_url: `${base}/api/v1/integrations/github/callback`,
     setup_url: `${base}/api/v1/integrations/github/setup`,
     setup_on_update: true,
-    public: false,
+    // Public so it can be installed on organizations as well as your account.
+    // Installs made by anyone else are ignored (see isOurInstallation).
+    public: true,
     default_permissions: { pull_requests: 'read', metadata: 'read' },
     default_events: ['pull_request'],
   };
@@ -139,17 +159,35 @@ export async function finishManifest(env: Env, code: string, state: string): Pro
     webhook_secret: data.webhook_secret,
     pem: data.pem,
     installation_id: null,
+    installations: [],
     created_at: new Date().toISOString(),
   };
   await saveApp(env.DB, app);
   return app;
 }
 
-export async function setInstallation(db: D1Database, installationId: number | null) {
+export async function addInstallation(db: D1Database, inst: Installation) {
   const app = await loadApp(db);
   if (!app) return;
-  app.installation_id = installationId;
+  app.installations = [...installsOf(app).filter((i) => i.id !== inst.id), inst];
+  app.installation_id = null;
   await saveApp(db, app);
+}
+
+export async function removeInstallation(db: D1Database, id: number) {
+  const app = await loadApp(db);
+  if (!app) return;
+  app.installations = installsOf(app).filter((i) => i.id !== id);
+  app.installation_id = null;
+  await saveApp(db, app);
+}
+
+/** After the install page sends you back: look the installation up and keep it. */
+export async function recordInstallation(env: Env, id: number) {
+  const app = await loadApp(env.DB);
+  if (!app) return;
+  const inst = await gh<{ id: number; account: { login: string } }>(`/app/installations/${id}`, `Bearer ${await appJwt(app)}`);
+  await addInstallation(env.DB, { id: inst.id, account: inst.account.login });
 }
 
 /** Webhook secrets to try: the app's, and the per-repo one from PM_WEBHOOK_SECRET. */
@@ -217,37 +255,44 @@ export interface InstalledRepos {
   repos: { full_name: string; html_url: string; private: boolean }[];
 }
 
-/** Repositories the app can see, via an installation token (cached in KV). */
+/** Repositories the app can see across your installations, via installation tokens (cached in KV). */
 export async function installedRepos(env: Env): Promise<InstalledRepos> {
   const app = await loadApp(env.DB);
   if (!app) return { selection: null, repos: [] };
-  let installationId = app.installation_id;
   const jwt = `Bearer ${await appJwt(app)}`;
-  if (installationId == null) {
-    // Setup redirect or webhook missed: ask GitHub.
-    const list = await gh<{ id: number }[]>('/app/installations', jwt);
-    if (!list.length) return { selection: null, repos: [] };
-    installationId = list[0].id;
-    await setInstallation(env.DB, installationId);
+  let installs = installsOf(app);
+  if (!installs.length && app.owner) {
+    // Setup redirect or webhook missed: adopt the install on your own account.
+    const list = await gh<{ id: number; account: { login: string } }[]>('/app/installations', jwt);
+    const mine = list.find((i) => i.account.login.toLowerCase() === app.owner!.toLowerCase());
+    if (!mine) return { selection: null, repos: [] };
+    await addInstallation(env.DB, { id: mine.id, account: mine.account.login });
+    installs = [{ id: mine.id, account: mine.account.login }];
   }
-  const install = await gh<{ repository_selection: 'all' | 'selected' }>(`/app/installations/${installationId}`, jwt);
-  const cacheKey = `gh-inst-token:${installationId}`;
-  let token = await env.OAUTH_KV.get(cacheKey);
-  if (!token) {
-    const t = await gh<{ token: string }>(`/app/installations/${installationId}/access_tokens`, jwt, { method: 'POST' });
-    token = t.token;
-    // Tokens live an hour; keep ours for 50 minutes.
-    await env.OAUTH_KV.put(cacheKey, token, { expirationTtl: 3000 });
-  }
+  if (!installs.length) return { selection: null, repos: [] };
   const repos: InstalledRepos['repos'] = [];
-  for (let page = 1; page <= 10; page++) {
-    const r = await gh<{ total_count: number; repositories: { full_name: string; html_url: string; private: boolean }[] }>(
-      `/installation/repositories?per_page=100&page=${page}`,
-      `token ${token}`,
-    );
-    repos.push(...r.repositories.map(({ full_name, html_url, private: p }) => ({ full_name, html_url, private: p })));
-    if (repos.length >= r.total_count || !r.repositories.length) break;
+  let all = true;
+  for (const { id } of installs) {
+    const install = await gh<{ repository_selection: 'all' | 'selected' }>(`/app/installations/${id}`, jwt);
+    if (install.repository_selection !== 'all') all = false;
+    const cacheKey = `gh-inst-token:${id}`;
+    let token = await env.OAUTH_KV.get(cacheKey);
+    if (!token) {
+      const t = await gh<{ token: string }>(`/app/installations/${id}/access_tokens`, jwt, { method: 'POST' });
+      token = t.token;
+      // Tokens live an hour; keep ours for 50 minutes.
+      await env.OAUTH_KV.put(cacheKey, token, { expirationTtl: 3000 });
+    }
+    for (let page = 1; page <= 10; page++) {
+      const r = await gh<{ total_count: number; repositories: { full_name: string; html_url: string; private: boolean }[] }>(
+        `/installation/repositories?per_page=100&page=${page}`,
+        `token ${token}`,
+      );
+      const before = repos.length;
+      repos.push(...r.repositories.map(({ full_name, html_url, private: p }) => ({ full_name, html_url, private: p })));
+      if (!r.repositories.length || repos.length - before < 100) break;
+    }
   }
   repos.sort((a, b) => a.full_name.localeCompare(b.full_name));
-  return { selection: install.repository_selection, repos };
+  return { selection: all ? 'all' : 'selected', repos };
 }

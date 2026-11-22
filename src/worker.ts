@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { api } from './api';
 import { authenticate, Principal } from './auth';
 import { PullRequestEvent, verifySignature } from './github';
-import { loadApp, setInstallation, webhookSecrets } from './githubApp';
+import { addInstallation, isOurInstallation, loadApp, removeInstallation, webhookSecrets } from './githubApp';
 import { handleAuthorize, oauthProvider } from './oauth';
 import { applyPullRequest } from './service';
 import { Actor, Env, HttpError } from './types';
@@ -56,16 +56,25 @@ app.post('/webhooks/github', async (c) => {
   if (!ok) return c.json({ error: 'Bad signature' }, 401);
   const event = c.req.header('X-GitHub-Event');
   if (event === 'ping') return c.json({ ok: true, pong: true });
+  const app = await loadApp(c.env.DB);
   if (event === 'installation') {
-    // GitHub App installed or removed: remember it so Settings can show it.
-    let p: { action?: string; installation?: { id?: number; app_id?: number } } = {};
+    // The app is public, so anyone could install it. Keep only installs you
+    // made yourself (on your account or an organization), so Settings can show them.
+    let p: {
+      action?: string;
+      installation?: { id?: number; app_id?: number; account?: { login?: string } };
+      sender?: { login?: string };
+    } = {};
     try {
       p = JSON.parse(raw);
     } catch {}
-    const app = await loadApp(c.env.DB);
-    if (app && p.installation?.app_id === app.id && typeof p.installation.id === 'number') {
-      if (p.action === 'created' || p.action === 'unsuspend') await setInstallation(c.env.DB, p.installation.id);
-      if (p.action === 'deleted' || p.action === 'suspend') await setInstallation(c.env.DB, null);
+    const id = p.installation?.id;
+    if (app && p.installation?.app_id === app.id && typeof id === 'number') {
+      const byOwner = !!app.owner && p.sender?.login?.toLowerCase() === app.owner.toLowerCase();
+      if ((p.action === 'created' || p.action === 'unsuspend') && byOwner) {
+        await addInstallation(c.env.DB, { id, account: p.installation.account?.login ?? '' });
+      }
+      if (p.action === 'deleted' || p.action === 'suspend') await removeInstallation(c.env.DB, id);
     }
     return c.json({ ok: true, installation: p.action ?? null });
   }
@@ -77,6 +86,11 @@ app.post('/webhooks/github', async (c) => {
     return c.json({ error: 'Expected a JSON body (set the webhook content type to application/json)' }, 400);
   }
   if (!payload?.pull_request || !payload.repository) return c.json({ error: 'Not a pull_request payload' }, 400);
+  // From the GitHub App: ignore installations that aren't yours.
+  const instId = (payload as { installation?: { id?: number } }).installation?.id;
+  if (typeof instId === 'number' && app && !isOurInstallation(app, instId)) {
+    return c.json({ ok: true, ignored: 'unknown installation' });
+  }
   return c.json({ ok: true, ...(await applyPullRequest(c.env.DB, payload)) });
 });
 

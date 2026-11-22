@@ -80,7 +80,7 @@ export interface GithubStatus {
   connected: boolean;
   app?: { name: string; slug: string; html_url: string; owner: string | null; settings_url: string; install_url: string };
   installed?: boolean;
-  installation_url?: string | null;
+  accounts?: string[];
   webhook_url: string;
 }
 

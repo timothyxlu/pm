@@ -67,7 +67,9 @@ Setup, once: **Settings → Connections · GitHub → Connect GitHub.** This wor
 
 1. MyPM sends GitHub an app manifest (webhook URL `https://pm.timothyxlu.xyz/webhooks/github`, the Pull requests event, read-only Pull requests + Metadata permissions). You confirm the name on github.com and click Create.
 2. GitHub sends the browser back to `/api/v1/integrations/github/callback`, which swaps the one-time code for the app's id, webhook secret and private key and stores them in D1 (`settings` table).
-3. You land on the app's install page. Pick **All repositories** (new repos are then included automatically). GitHub returns to Settings, which shows the app as installed.
+3. You land on the app's install page. Pick your account or an organization, then **All repositories** (new repos are then included automatically). GitHub returns to Settings, which shows the app as installed. Use "管理仓库" to add more organizations.
+
+The app is public so it can be installed on organizations; MyPM only accepts installations you made (the `installation` event's sender is the app owner, or you came back through the setup page). Events from anyone else's installation are ignored.
 
 The callback and setup URLs are under `/api/v1`, behind Cloudflare Access like the rest of the app: GitHub only redirects your browser there, so no extra Bypass rule is needed. Webhook deliveries go to `/webhooks/*`, which is already in the Bypass app; the signature check is what keeps others out.
 
