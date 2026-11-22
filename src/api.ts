@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { Principal } from './auth';
+import * as gh from './githubApp';
 import * as svc from './service';
 import { Actor, Env, HttpError, STATUSES } from './types';
 
@@ -94,3 +95,33 @@ api.post('/tokens', async (c) => {
   return c.json(await svc.createToken(c.env.DB, name), 201);
 });
 api.delete('/tokens/:id', async (c) => c.json(await svc.revokeToken(c.env.DB, c.req.param('id'))));
+
+// ----- integrations: GitHub App (browser only, never with a token) -----
+api.use('/integrations/*', async (c, next) => {
+  if (c.get('principal').kind === 'token') throw new HttpError(403, 'Manage integrations from the web app');
+  await next();
+});
+api.get('/integrations/github', async (c) => c.json(gh.status(c.env, await gh.loadApp(c.env.DB))));
+// Step 1: the page POSTs this manifest to GitHub as a form.
+api.post('/integrations/github/manifest', async (c) => c.json(await gh.startManifest(c.env)));
+// Step 2: GitHub sends the browser back here after you confirm the app.
+api.get('/integrations/github/callback', async (c) => {
+  try {
+    const app = await gh.finishManifest(c.env, c.req.query('code') ?? '', c.req.query('state') ?? '');
+    // Step 3: install it. GitHub comes back to /setup afterwards.
+    return c.redirect(`${app.html_url}/installations/new`, 302);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'failed';
+    return c.redirect(`/settings?github=error&message=${encodeURIComponent(msg)}`, 302);
+  }
+});
+api.get('/integrations/github/setup', async (c) => {
+  const id = Number(c.req.query('installation_id'));
+  if (Number.isSafeInteger(id) && id > 0) await gh.setInstallation(c.env.DB, id);
+  return c.redirect('/settings?github=installed', 302);
+});
+// Forget the app here. Delete it on GitHub too (the page links there).
+api.delete('/integrations/github', async (c) => {
+  await gh.deleteApp(c.env.DB);
+  return c.json(gh.status(c.env, null));
+});

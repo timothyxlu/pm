@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { api } from './api';
 import { authenticate, Principal } from './auth';
 import { PullRequestEvent, verifySignature } from './github';
+import { loadApp, setInstallation, webhookSecrets } from './githubApp';
 import { handleAuthorize, oauthProvider } from './oauth';
 import { applyPullRequest } from './service';
 import { Actor, Env, HttpError } from './types';
@@ -41,18 +42,33 @@ app.all('/authorize', (c) =>
 // Access sends the browser to sign in, then this sends it back to the app.
 app.get('/login', (c) => c.redirect('/', 302));
 
-// GitHub webhooks (repo or GitHub App webhook, content type application/json,
-// "Pull requests" events). Cloudflare Access bypasses /webhooks/*, so the
-// shared secret is the only thing that proves a request came from GitHub.
+// GitHub webhooks: from the MyPM GitHub App (Settings → Connect GitHub) or a
+// per-repo webhook (content type application/json, "Pull requests" events).
+// Cloudflare Access bypasses /webhooks/*, so the signature is the only thing
+// that proves a request came from GitHub. Either secret is accepted.
 app.post('/webhooks/github', async (c) => {
-  const secret = c.env.GITHUB_WEBHOOK_SECRET;
-  if (!secret) return c.json({ error: 'GITHUB_WEBHOOK_SECRET is not set' }, 503);
+  const secrets = await webhookSecrets(c.env);
+  if (!secrets.length) return c.json({ error: 'No webhook secret: connect GitHub in Settings or set GITHUB_WEBHOOK_SECRET' }, 503);
   const raw = await c.req.text();
-  if (!(await verifySignature(secret, raw, c.req.header('X-Hub-Signature-256') ?? null))) {
-    return c.json({ error: 'Bad signature' }, 401);
-  }
+  const sig = c.req.header('X-Hub-Signature-256') ?? null;
+  let ok = false;
+  for (const secret of secrets) if (await verifySignature(secret, raw, sig)) ok = true;
+  if (!ok) return c.json({ error: 'Bad signature' }, 401);
   const event = c.req.header('X-GitHub-Event');
   if (event === 'ping') return c.json({ ok: true, pong: true });
+  if (event === 'installation') {
+    // GitHub App installed or removed: remember it so Settings can show it.
+    let p: { action?: string; installation?: { id?: number; app_id?: number } } = {};
+    try {
+      p = JSON.parse(raw);
+    } catch {}
+    const app = await loadApp(c.env.DB);
+    if (app && p.installation?.app_id === app.id && typeof p.installation.id === 'number') {
+      if (p.action === 'created' || p.action === 'unsuspend') await setInstallation(c.env.DB, p.installation.id);
+      if (p.action === 'deleted' || p.action === 'suspend') await setInstallation(c.env.DB, null);
+    }
+    return c.json({ ok: true, installation: p.action ?? null });
+  }
   if (event !== 'pull_request') return c.json({ ok: true, ignored: event ?? null });
   let payload: PullRequestEvent;
   try {

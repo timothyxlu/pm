@@ -63,13 +63,21 @@ Like Linear, a pull request moves the issues it refers to:
 
 A PR refers to an issue when the identifier is in its **branch name** (`dev-123-fix-rss`, `claude/dev-123`), its **title** (`DEV-123 Fix RSS`), or its description after a closing word (`Fixes DEV-123`, also close/resolve/complete, and lists like `Fixes DEV-1, DEV-2`). These close the issue on merge. `Part of DEV-123` (also refs / related to / contributes to / towards) links the PR and starts the issue but never closes it. Bare mentions in the description are ignored. Statuses only move forward, so a done or canceled issue stays put, and redelivered events are harmless. Changes show as GitHub in the activity log, and the PR appears in the issue's GitHub section.
 
-Setup, once:
+Setup, once: **Settings → Connections · GitHub → Connect GitHub.** This works like Linear's GitHub integration:
+
+1. MyPM sends GitHub an app manifest (webhook URL `https://pm.timothyxlu.xyz/webhooks/github`, the Pull requests event, read-only Pull requests + Metadata permissions). You confirm the name on github.com and click Create.
+2. GitHub sends the browser back to `/api/v1/integrations/github/callback`, which swaps the one-time code for the app's id, webhook secret and private key and stores them in D1 (`settings` table).
+3. You land on the app's install page. Pick **All repositories** (new repos are then included automatically). GitHub returns to Settings, which shows the app as installed.
+
+The callback and setup URLs are under `/api/v1`, behind Cloudflare Access like the rest of the app: GitHub only redirects your browser there, so no extra Bypass rule is needed. Webhook deliveries go to `/webhooks/*`, which is already in the Bypass app; the signature check is what keeps others out.
+
+### Per-repo webhook (older setup, still works)
 
 1. Make a random secret, e.g. `openssl rand -hex 32`.
 2. Add it as the `PM_WEBHOOK_SECRET` repository secret of this repo (Settings → Secrets and variables → Actions). The next deploy stores it as the Worker secret `GITHUB_WEBHOOK_SECRET`. (Or run `npx wrangler secret put GITHUB_WEBHOOK_SECRET` yourself.)
-3. In each repo whose PRs should update issues: Settings → Webhooks → Add webhook. Payload URL `https://pm.timothyxlu.xyz/webhooks/github`, content type `application/json`, the same secret, "Let me select individual events" → **Pull requests** only. GitHub sends a ping, which should get a green tick.
+3. In each repo: Settings → Webhooks → Add webhook. Payload URL `https://pm.timothyxlu.xyz/webhooks/github`, content type `application/json`, the same secret, "Let me select individual events" → **Pull requests** only.
 
-`/webhooks/*` is in the Access Bypass app, so the signature check is what keeps others out; without the secret the endpoint answers 503.
+`/webhooks/github` accepts a signature from either the app's secret or `GITHUB_WEBHOOK_SECRET`. With neither configured it answers 503. Once the app is installed on a repo, remove that repo's old webhook, or each PR event is processed twice (harmless, since statuses only move forward).
 
 ## Importing from Linear
 
