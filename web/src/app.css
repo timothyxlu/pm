@@ -75,6 +75,9 @@
   box-sizing: border-box;
 }
 html {
+  background: var(--bg);
+  /* The root scroller is html, so this is where bounce and pull-to-refresh stop. */
+  overscroll-behavior-y: none;
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
 }
@@ -116,7 +119,6 @@ button {
 .page {
   max-width: 640px;
   margin: 0 auto;
-  min-height: 100dvh;
   padding: calc(var(--safe-t) + 8px) 16px calc(var(--nav-h) + var(--safe-b) + 88px);
 }
 .page.plain {
