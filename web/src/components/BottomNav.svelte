@@ -62,7 +62,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 6px 20px rgb(79 70 229 / 0.35);
+    box-shadow: 0 6px 20px color-mix(in srgb, var(--accent) 35%, transparent);
     z-index: 11;
   }
 </style>
