@@ -565,15 +565,15 @@
     padding: 2px 4px;
     background: var(--surface-2);
   }
-  .dmain .sec-head {
-    margin-top: 28px;
+  .sec-head {
+    margin-top: 24px;
     margin-bottom: 8px;
   }
-  .dmain .sec-head .section-title {
-    margin: 0;
+  .sec-head .section-title {
+    margin: 0 !important;
   }
-  .dmain .sec-head .link {
-    min-height: 0;
+  .sec-head .link {
+    min-height: 32px;
   }
   .dmain .sub {
     min-height: 40px;
