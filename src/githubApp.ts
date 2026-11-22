@@ -157,3 +157,97 @@ export async function webhookSecrets(env: Env): Promise<string[]> {
   const app = await loadApp(env.DB);
   return [app?.webhook_secret, env.GITHUB_WEBHOOK_SECRET].filter((s): s is string => !!s);
 }
+
+// ---------- Acting as the app: list the repositories it is installed on ----------
+
+const API = 'https://api.github.com';
+const GH_HEADERS = { Accept: 'application/vnd.github+json', 'User-Agent': 'MyPM', 'X-GitHub-Api-Version': '2022-11-28' };
+
+function b64url(data: Uint8Array | string) {
+  const bytes = typeof data === 'string' ? new TextEncoder().encode(data) : data;
+  let bin = '';
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function derLength(n: number): number[] {
+  if (n < 0x80) return [n];
+  const out: number[] = [];
+  while (n > 0) {
+    out.unshift(n & 0xff);
+    n >>= 8;
+  }
+  return [0x80 | out.length, ...out];
+}
+
+/** GitHub hands out PKCS#1 ("RSA PRIVATE KEY"); WebCrypto wants PKCS#8. */
+export function pemToPkcs8(pem: string): Uint8Array {
+  const body = pem.replace(/-----[^-]+-----/g, '').replace(/\s+/g, '');
+  const der = Uint8Array.from(atob(body), (c) => c.charCodeAt(0));
+  if (!pem.includes('BEGIN RSA PRIVATE KEY')) return der;
+  // PrivateKeyInfo ::= SEQUENCE { version 0, AlgorithmIdentifier rsaEncryption, OCTET STRING pkcs1 }
+  const algo = [0x30, 0x0d, 0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01, 0x05, 0x00];
+  const octet = [0x04, ...derLength(der.length)];
+  const inner = [0x02, 0x01, 0x00, ...algo, ...octet];
+  const total = inner.length + der.length;
+  const out = new Uint8Array([0x30, ...derLength(total), ...inner, ...der]);
+  return out;
+}
+
+/** A short-lived JWT that authenticates as the app itself. */
+export async function appJwt(app: Pick<GithubApp, 'id' | 'pem'>): Promise<string> {
+  const key = await crypto.subtle.importKey('pkcs8', pemToPkcs8(app.pem), { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, [
+    'sign',
+  ]);
+  const now = Math.floor(Date.now() / 1000);
+  const head = b64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
+  const body = b64url(JSON.stringify({ iat: now - 60, exp: now + 540, iss: String(app.id) }));
+  const sig = new Uint8Array(await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, new TextEncoder().encode(`${head}.${body}`)));
+  return `${head}.${body}.${b64url(sig)}`;
+}
+
+async function gh<T>(path: string, auth: string, init: RequestInit = {}): Promise<T> {
+  const res = await fetch(API + path, { ...init, headers: { ...GH_HEADERS, Authorization: auth } });
+  if (!res.ok) throw new HttpError(502, `GitHub ${path.split('?')[0]}: ${res.status}`);
+  return (await res.json()) as T;
+}
+
+export interface InstalledRepos {
+  selection: 'all' | 'selected' | null;
+  repos: { full_name: string; html_url: string; private: boolean }[];
+}
+
+/** Repositories the app can see, via an installation token (cached in KV). */
+export async function installedRepos(env: Env): Promise<InstalledRepos> {
+  const app = await loadApp(env.DB);
+  if (!app) return { selection: null, repos: [] };
+  let installationId = app.installation_id;
+  const jwt = `Bearer ${await appJwt(app)}`;
+  if (installationId == null) {
+    // Setup redirect or webhook missed: ask GitHub.
+    const list = await gh<{ id: number }[]>('/app/installations', jwt);
+    if (!list.length) return { selection: null, repos: [] };
+    installationId = list[0].id;
+    await setInstallation(env.DB, installationId);
+  }
+  const install = await gh<{ repository_selection: 'all' | 'selected' }>(`/app/installations/${installationId}`, jwt);
+  const cacheKey = `gh-inst-token:${installationId}`;
+  let token = await env.OAUTH_KV.get(cacheKey);
+  if (!token) {
+    const t = await gh<{ token: string }>(`/app/installations/${installationId}/access_tokens`, jwt, { method: 'POST' });
+    token = t.token;
+    // Tokens live an hour; keep ours for 50 minutes.
+    await env.OAUTH_KV.put(cacheKey, token, { expirationTtl: 3000 });
+  }
+  const repos: InstalledRepos['repos'] = [];
+  for (let page = 1; page <= 10; page++) {
+    const r = await gh<{ total_count: number; repositories: { full_name: string; html_url: string; private: boolean }[] }>(
+      `/installation/repositories?per_page=100&page=${page}`,
+      `token ${token}`,
+    );
+    repos.push(...r.repositories.map(({ full_name, html_url, private: p }) => ({ full_name, html_url, private: p })));
+    if (repos.length >= r.total_count || !r.repositories.length) break;
+  }
+  repos.sort((a, b) => a.full_name.localeCompare(b.full_name));
+  return { selection: install.repository_selection, repos };
+}

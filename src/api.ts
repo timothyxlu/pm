@@ -102,6 +102,7 @@ api.use('/integrations/*', async (c, next) => {
   await next();
 });
 api.get('/integrations/github', async (c) => c.json(gh.status(c.env, await gh.loadApp(c.env.DB))));
+api.get('/integrations/github/repos', async (c) => c.json(await gh.installedRepos(c.env)));
 // Step 1: the page POSTs this manifest to GitHub as a form.
 api.post('/integrations/github/manifest', async (c) => c.json(await gh.startManifest(c.env)));
 // Step 2: GitHub sends the browser back here after you confirm the app.

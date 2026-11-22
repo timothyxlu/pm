@@ -125,5 +125,10 @@ export const api = {
   revokeToken: (id: string) => request<unknown>('DELETE', `/tokens/${encodeURIComponent(id)}`),
   github: () => request<GithubStatus>('GET', '/integrations/github'),
   githubManifest: () => request<{ action: string; manifest: unknown }>('POST', '/integrations/github/manifest'),
+  githubRepos: () =>
+    request<{ selection: 'all' | 'selected' | null; repos: { full_name: string; html_url: string; private: boolean }[] }>(
+      'GET',
+      '/integrations/github/repos',
+    ),
   disconnectGithub: () => request<GithubStatus>('DELETE', '/integrations/github'),
 };
