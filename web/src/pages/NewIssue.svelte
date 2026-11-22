@@ -20,6 +20,8 @@
   let fields = $state({ status: 'todo' as Status, priority: 0, labels: [] as string[], due_date: null as string | null });
   let picking = $state(false);
   let busy = $state(false);
+  let more = $state(false);
+  let createdId = $state('');
   let error = $state('');
 
   function startProject() {
@@ -74,7 +76,13 @@
         localStorage.setItem('pm.lastProject', project);
       } catch {}
       store.sync();
-      router.go(`/i/${created.identifier}`, true);
+      if (more) {
+        // "Create another": stay here with the same project and fields.
+        title = '';
+        description = '';
+        createdId = created.identifier;
+        document.querySelector<HTMLElement>('.mtitle, .dtitle')?.focus();
+      } else router.go(`/i/${created.identifier}`, true);
     } catch (err) {
       store.handleError(err);
       error = `${t.saveFailed}: ${(err as Error).message}`;
@@ -120,18 +128,20 @@
       <footer class="dfoot">
         {#if nextId}<span class="hint">{t.willCreateAs(nextId)}</span>{/if}
         {#if !activeProjects.length && store.loaded}<span class="hint">{t.noProjects}</span>{/if}
+        {#if createdId}<span class="hint ok"><Icon name="check" size={14} />{t.createdAs(createdId)}</span>{/if}
         <span class="spacer"></span>
+        <label class="moremode"><input type="checkbox" bind:checked={more} />{t.createMore}</label>
         <button type="button" class="btn" onclick={close}>{t.cancel}</button>
         <button type="submit" class="btn primary" disabled={busy || !title.trim() || !project}>{t.create} <kbd>⌘↵</kbd></button>
       </footer>
     </form>
   </dialog>
 {:else}
-<form class="page plain" onsubmit={submit} aria-label={t.newIssue}>
+<form class="page plain mnew" onsubmit={submit} aria-label={t.newIssue}>
   <header class="bar">
-    <button type="button" class="text-btn" onclick={() => router.back(project ? `/p/${project}` : '/')}>{t.cancel}</button>
-    <h1>{t.newIssue}</h1>
-    <button type="submit" class="text-btn strong" disabled={busy || !title.trim() || !project}>{t.create}</button>
+    <button type="button" class="text-btn" onclick={close}>{t.cancel}</button>
+    <h1>{t.newIssue}{#if nextId}<span class="nid mono">{nextId}</span>{/if}</h1>
+    <button type="submit" class="create" disabled={busy || !title.trim() || !project}>{t.create}</button>
   </header>
 
   {#if parent}
@@ -143,35 +153,38 @@
     </div>
   {/if}
 
-  <div class="field">
-    <label for="title">{t.title}</label>
-    <input
-      id="title"
-      class="input big"
-      bind:value={title}
-      required
-      autocomplete="off"
-      enterkeyhint="done"
-      {@attach (el) => el.focus()}
-    />
-  </div>
-  <div class="field">
-    <label for="desc">{t.descriptionHint}</label>
-    <textarea id="desc" class="input" rows="5" bind:value={description} placeholder={t.descriptionPlaceholder} onkeydown={cmdEnter}></textarea>
+  <textarea
+    class="mtitle"
+    rows="1"
+    bind:value={title}
+    placeholder={t.title}
+    aria-label={t.title}
+    required
+    enterkeyhint="next"
+    onkeydown={(e) => {
+      if (e.key === 'Enter' && !e.isComposing) {
+        e.preventDefault();
+        if (e.metaKey || e.ctrlKey) submit();
+        else (e.currentTarget.form?.querySelector('.mdesc') as HTMLElement | null)?.focus();
+      }
+    }}
+    {@attach (el) => el.focus()}
+  ></textarea>
+
+  <div class="mfields">
+    <IssueFields {...fields} onchange={(p) => (fields = { ...fields, ...p })}>
+      {#snippet lead()}
+        <button type="button" class="chip strong" onclick={() => (picking = true)} disabled={!!parent}>
+          {#if store.projects[project]}<span class="mono key">{project}</span>{store.projects[project].name}{:else}{t.chooseProject}{/if}
+        </button>
+      {/snippet}
+    </IssueFields>
   </div>
 
-  <div class="chips">
-    <button type="button" class="chip strong" onclick={() => (picking = true)} disabled={!!parent}>
-      {#if store.projects[project]}
-        <span class="mono key">{project}</span>{store.projects[project].name}
-      {:else}
-        {t.chooseProject}
-      {/if}
-    </button>
-  </div>
-  <IssueFields {...fields} onchange={(p) => (fields = { ...fields, ...p })} />
+  <textarea class="mdesc" rows="6" bind:value={description} placeholder={t.descriptionHint} aria-label={t.description} onkeydown={cmdEnter}></textarea>
 
-  {#if nextId}<p class="hint next">{t.willCreateAs(nextId)}</p>{/if}
+  <label class="moremode"><input type="checkbox" bind:checked={more} />{t.createMore}</label>
+  {#if createdId}<p class="hint ok"><Icon name="check" size={14} />{t.createdAs(createdId)}</p>{/if}
   {#if !activeProjects.length && store.loaded}<p class="hint">{t.noProjects}</p>{/if}
   {#if error}<p class="error" role="alert">{error}</p>{/if}
 </form>
@@ -191,6 +204,92 @@
 </Sheet>
 
 <style>
+  .mnew .bar {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: var(--bg);
+    margin: calc(-8px - var(--safe-t)) -16px 4px;
+    padding: var(--safe-t) 12px 0;
+  }
+  .nid {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--muted);
+    margin-left: 6px;
+  }
+  .create {
+    height: 34px;
+    padding: 0 16px;
+    border: 0;
+    border-radius: 17px;
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-weight: 700;
+    font-size: 15px;
+  }
+  .create:disabled {
+    opacity: 0.4;
+  }
+  .mtitle,
+  .mdesc {
+    width: 100%;
+    border: 0;
+    outline: none;
+    background: transparent;
+    resize: none;
+    padding: 0;
+    color: var(--ink);
+    field-sizing: content;
+  }
+  .mtitle {
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.3;
+    margin: 12px 0 14px;
+    min-height: 1.3em;
+  }
+  .mdesc {
+    font-size: 16px;
+    line-height: 1.55;
+    min-height: 140px;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--line);
+  }
+  .mtitle::placeholder,
+  .mdesc::placeholder {
+    color: var(--faint);
+  }
+  .moremode {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+    font-size: 14px;
+    color: var(--muted);
+  }
+  .moremode input {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--accent);
+    margin: 0;
+  }
+  .dfoot .moremode {
+    min-height: 0;
+    font-size: 13px;
+    margin-right: 6px;
+  }
+  .dfoot .moremode input {
+    width: 15px;
+    height: 15px;
+  }
+  .hint.ok {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--st-in_review);
+  }
   .newdlg {
     margin: 10vh auto auto;
     padding: 0;
@@ -331,18 +430,8 @@
     min-height: 44px;
     padding: 0 4px;
   }
-  .text-btn.strong {
-    font-weight: 700;
-  }
   .text-btn:disabled {
     opacity: 0.4;
-  }
-  .big {
-    font-size: 18px;
-    font-weight: 600;
-  }
-  .chips {
-    margin-bottom: 8px;
   }
   .strong {
     font-weight: 600;
@@ -367,9 +456,6 @@
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
-  }
-  .next {
-    margin-top: 16px;
   }
   .error {
     color: var(--danger);

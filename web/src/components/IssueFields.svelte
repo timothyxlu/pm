@@ -1,6 +1,7 @@
 <script lang="ts">
   // The chip row shared by the issue page and the create form: status,
   // priority, labels and due date. Each chip opens a bottom sheet.
+  import type { Snippet } from 'svelte';
   import { STATUSES, type Status } from '../lib/api';
   import { fmtDay, i18n } from '../lib/i18n.svelte';
   import { store } from '../lib/store.svelte';
@@ -16,8 +17,11 @@
     due_date,
     onchange,
     vertical = false,
+    lead,
   }: {
     vertical?: boolean;
+    /** Extra chip shown first in the chip bar (the new-issue page puts the project there). */
+    lead?: Snippet;
     status: Status;
     priority: number;
     labels: string[];
@@ -82,6 +86,7 @@
   </div>
 {:else}
 <div class="chips">
+  {@render lead?.()}
   <button type="button" class="chip strong" onclick={() => open('status')}>
     <StatusIcon {status} size={14} />{t.statuses[status]}
   </button>
@@ -230,10 +235,29 @@
     background: var(--accent);
     opacity: 0.7;
   }
+  /* One row that scrolls sideways on phones, instead of wrapping into a pile. */
   .chips {
     display: flex;
-    flex-wrap: wrap;
     gap: 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    margin: 0 -16px;
+    padding: 2px 16px;
+    scroll-padding: 0 16px;
+  }
+  .chips::-webkit-scrollbar {
+    display: none;
+  }
+  .chips > :global(*) {
+    flex-shrink: 0;
+  }
+  @media (min-width: 960px) {
+    .chips {
+      flex-wrap: wrap;
+      overflow: visible;
+      margin: 0;
+      padding: 0;
+    }
   }
   .strong {
     font-weight: 600;

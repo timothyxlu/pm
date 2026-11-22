@@ -10,7 +10,7 @@
 
 <a class="fab" href={newHref} aria-label={t.newIssue}><Icon name="plus" size={26} /></a>
 <nav aria-label="Main">
-  <a href="/" aria-current={name === 'home' || name === 'project' ? 'page' : undefined}><Icon name="grid" />{t.projects}</a>
+  <a href="/" aria-current={name === 'home' || name === 'project' ? 'page' : undefined}><Icon name="grid" />{t.overview}</a>
   <a href="/active" aria-current={name === 'active' ? 'page' : undefined}><Icon name="bolt" />{t.active}</a>
   <a href="/search" aria-current={name === 'search' ? 'page' : undefined}><Icon name="search" />{t.search}</a>
 </nav>

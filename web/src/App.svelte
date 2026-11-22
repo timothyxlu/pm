@@ -2,6 +2,7 @@
   import Banner from './components/Banner.svelte';
   import BottomNav from './components/BottomNav.svelte';
   import Palette from './components/Palette.svelte';
+  import QuickStatus from './components/QuickStatus.svelte';
   import ShortcutHelp from './components/ShortcutHelp.svelte';
   import Sidebar from './components/Sidebar.svelte';
   import { keys } from './lib/keys.svelte';
@@ -58,4 +59,5 @@
 </div>
 
 <Palette />
+<QuickStatus />
 <ShortcutHelp />

@@ -25,6 +25,8 @@
   });
 
   const results = $derived(searchIssues(store.live, q));
+  // With an empty box, offer what was touched last, like a recents list.
+  const recent = $derived([...store.live].sort((a, b) => b.updated_at.localeCompare(a.updated_at)).slice(0, 8));
 </script>
 
 {#if media.desktop}
@@ -75,6 +77,11 @@
     </div>
   {:else if q.trim()}
     <p class="empty">{t.noResults}</p>
+  {:else if recent.length}
+    <h2 class="section-title">{t.recent}</h2>
+    <div class="list">
+      {#each recent as issue (issue.id)}<IssueRow {issue} />{/each}
+    </div>
   {/if}
 </div>
 {/if}
