@@ -39,8 +39,12 @@ export default defineConfig({
       },
       workbox: {
         navigateFallback: '/index.html',
-        // These paths belong to the Worker, never to the app shell.
-        navigateFallbackDenylist: [/^\/api\//, /^\/mcp/, /^\/oauth\//, /^\/authorize/, /^\/\.well-known\//, /^\/webhooks\//, /^\/login/],
+        // Serve the app shell only for the app's own routes (see router.svelte.ts).
+        // Every other navigation must reach the network: the Worker's routes, and
+        // above all Cloudflare Access's /cdn-cgi/access/authorized, which sets the
+        // session cookie after sign-in. Answering that one from the cache made
+        // "sign in again" silently do nothing.
+        navigateFallbackAllowlist: [/^\/(\?|$)/, /^\/(active|search|settings|new|p|i)(\/|\?|$)/],
         globPatterns: ['**/*.{js,css,html,svg,png,webmanifest}'],
       },
     }),
