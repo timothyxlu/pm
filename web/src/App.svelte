@@ -17,7 +17,7 @@
   import Settings from './pages/Settings.svelte';
 
   const r = $derived(router.route);
-  const withNav = $derived(['home', 'active', 'search', 'project'].includes(r.name));
+  const withNav = $derived(['home', 'active', 'search', 'project', 'settings'].includes(r.name));
 
   // On wide screens "new issue" opens as a dialog over the page you were on.
   let behind = $state<Route>(router.route.name === 'new' ? { name: 'home' } : router.route);

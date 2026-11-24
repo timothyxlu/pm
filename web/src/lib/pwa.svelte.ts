@@ -96,6 +96,17 @@ class Install {
     });
     for (const q of ['(display-mode: standalone)', '(display-mode: window-controls-overlay)'])
       matchMedia(q).addEventListener?.('change', () => (this.standalone = isStandalone()));
+    // On Android the installed app stays in the app list after its home-screen
+    // icon is removed or the site's data is cleared, and Chrome then neither
+    // offers installing nor shows "Add to home screen". Chrome can still tell
+    // us it is installed, through related_applications in the manifest.
+    const nav = navigator as Navigator & { getInstalledRelatedApps?: () => Promise<unknown[]> };
+    nav
+      .getInstalledRelatedApps?.()
+      .then((apps) => {
+        if (apps.length && this.platform !== 'prompt') this.markInstalled();
+      })
+      .catch(() => {});
   }
 
   /** Shows the browser's install dialog. */
