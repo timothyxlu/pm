@@ -1,4 +1,5 @@
 <script lang="ts">
+  import InstallBanner from '../components/InstallBanner.svelte';
   import Icon from '../components/Icon.svelte';
   import IssueLine from '../components/IssueLine.svelte';
   import IssueRow from '../components/IssueRow.svelte';
@@ -34,6 +35,7 @@
     <a class="hbtn primary" href={keys.newIssueHref()}><Icon name="plus" size={14} />{t.newIssue}<kbd>C</kbd></a>
   </header>
   <div class="dbody">
+    <InstallBanner />
     <div class="dstats">
       <div class="dstat"><span class="lbl">{t.doneThisWeek}</span><span class="n mono">{stats.done}</span></div>
       <div class="dstat"><span class="lbl"><StatusIcon status="in_progress" size={13} />{t.inProgress}</span><span class="n mono">{stats.inProgress}</span></div>
@@ -105,6 +107,8 @@
     </div>
     <a class="icon-btn" href="/settings" aria-label={t.settings}><Icon name="settings" /></a>
   </header>
+
+  <InstallBanner />
 
   <div class="mstats card">
     <div><span class="n mono">{stats.done}</span><span>{t.doneThisWeek}</span></div>

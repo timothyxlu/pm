@@ -35,6 +35,7 @@ npm run smoke:oauth                       # end-to-end OAuth flow for MCP
 
 - Renders from IndexedDB at once, then pulls changes from `/api/v1/sync` (on load, when the tab becomes visible, and after each change). Search runs on the local copy.
 - Works offline for reading: the service worker caches the app shell. Changes need a connection for now.
+- Install: a dismissible banner on the overview (Chrome/Edge with an Install button, iPhone Safari with the steps), and Settings → Install app with an Install button where the browser offers one (Chrome, Edge), or the steps for Safari (Share → Add to Home Screen on iPhone). The service worker answers only the app's own routes from cache, so Access's sign-in callback (`/cdn-cgi/access/authorized`) always reaches the network.
 - When the Access session expires, a banner links to `/login`, which Access sends through sign-in and the Worker redirects back to `/`.
 - Language follows the system and can be switched in Settings. Theme likewise.
 - Two layouts from one codebase: below 960px wide it is the mobile PWA (bottom tabs, sheets); from 960px it switches to a desktop layout with a sidebar, dense one-line issue lists, a two-column issue page with a properties panel, a new-issue dialog and a ⌘K command palette (`web/src/lib/media.svelte.ts` holds the breakpoint).
