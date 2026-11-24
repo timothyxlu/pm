@@ -20,6 +20,7 @@ export default defineConfig({
       useCredentials: true,
       includeAssets: ['icon.svg', 'apple-touch-icon.png'],
       manifest: {
+        id: '/',
         name: 'MyPM',
         short_name: 'MyPM',
         description: 'Projects and issues',

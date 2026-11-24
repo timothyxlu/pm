@@ -3,6 +3,7 @@
   import { api, type GithubStatus, type Token } from '../lib/api';
   import { fmtAgo, i18n, type LangPref } from '../lib/i18n.svelte';
   import { media } from '../lib/media.svelte';
+  import { install } from '../lib/pwa.svelte';
   import { router } from '../lib/router.svelte';
   import { store } from '../lib/store.svelte';
   import { theme, type ThemePref } from '../lib/theme.svelte';
@@ -146,6 +147,38 @@
     </header>
   {/if}
 
+  <section class="install">
+    <h2 class="section-title">{t.installApp}</h2>
+    <div class="list">
+      <div class="tokrow">
+        <img src="/icon.svg" alt="" width="32" height="32" />
+        <div class="tokinfo">
+          {#if install.standalone}
+            <span>{t.installRunning}</span>
+          {:else if install.installed}
+            <span>{t.installDone}</span>
+          {:else}
+            <span>MyPM</span>
+            <span class="sub">
+              {install.platform === 'prompt'
+                ? t.installHint
+                : install.platform === 'ios-safari'
+                  ? t.installIos
+                  : install.platform === 'ios-other'
+                    ? t.installIosOther
+                    : install.platform === 'mac-safari'
+                      ? t.installMacSafari
+                      : t.installManual}
+            </span>
+          {/if}
+        </div>
+        {#if install.platform === 'prompt' && !install.standalone && !install.installed}
+          <button class="btn primary" onclick={() => install.prompt()}>{t.installButton}</button>
+        {/if}
+      </div>
+    </div>
+  </section>
+
   <fieldset>
     <legend class="section-title">{t.language}</legend>
     <div class="list">
@@ -268,7 +301,8 @@
     padding: 0;
   }
   fieldset + fieldset,
-  fieldset + section {
+  fieldset + section,
+  .install + fieldset {
     margin-top: 24px;
   }
   .radio {
