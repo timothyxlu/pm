@@ -27,13 +27,41 @@ function detectPlatform(): Exclude<InstallPlatform, 'prompt'> {
   return 'manual';
 }
 
+const DISMISS_KEY = 'pm.installBanner.dismissed';
+function readDismissed() {
+  try {
+    return localStorage.getItem(DISMISS_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 class Install {
   /** Running as the installed app. */
   standalone = $state(isStandalone());
   /** Installed during this visit. */
   installed = $state(false);
   platform = $state<InstallPlatform>(detectPlatform());
+  /** The overview's install banner was closed with "don't show again". */
+  bannerDismissed = $state(readDismissed());
   private deferred: BeforeInstallPromptEvent | null = null;
+
+  /** Show the banner only where installing is one tap or a known recipe. */
+  get showBanner() {
+    return (
+      !this.bannerDismissed &&
+      !this.standalone &&
+      !this.installed &&
+      (this.platform === 'prompt' || this.platform === 'ios-safari')
+    );
+  }
+
+  dismissBanner() {
+    this.bannerDismissed = true;
+    try {
+      localStorage.setItem(DISMISS_KEY, '1');
+    } catch {}
+  }
 
   constructor() {
     // Must be listening before the app mounts: the event can fire very early.
