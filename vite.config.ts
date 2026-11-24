@@ -27,6 +27,9 @@ export default defineConfig({
         start_url: '/',
         scope: '/',
         display: 'standalone',
+        // Lets the page ask Chrome whether this app is already installed
+        // (navigator.getInstalledRelatedApps). Must be the deployed manifest URL.
+        related_applications: [{ platform: 'webapp', url: 'https://pm.timothyxlu.xyz/manifest.webmanifest' }],
         // Android takes the system bar colors from the manifest, which has no
         // dark variant. Use the dark colors: the in-app <meta theme-color>
         // still switches the top bar to light when the light theme is on.
