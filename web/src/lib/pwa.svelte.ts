@@ -22,28 +22,41 @@ function detectPlatform(): Exclude<InstallPlatform, 'prompt'> {
   const ua = navigator.userAgent;
   // iPadOS reports itself as a Mac; touch points give it away.
   const ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
-  if (ios) return /CriOS|FxiOS|EdgiOS|OPiOS|GSA\//.test(ua) ? 'ios-other' : 'ios-safari';
-  if (/Macintosh/.test(ua) && /Version\/\d+.*Safari/.test(ua) && !/Chrome|Chromium|Edg\//.test(ua)) return 'mac-safari';
+  if (ios) {
+    // In-app web views (Gmail, Slack, …) drop the Safari/ token and have no Add to Home Screen.
+    const safari = /Safari\//.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS|GSA\//.test(ua);
+    return safari ? 'ios-safari' : 'ios-other';
+  }
+  // File → Add to Dock arrived in Safari 17.
+  const macSafari = /Macintosh/.test(ua) && !/Chrome|Chromium|Edg\//.test(ua) && /Version\/(\d+).*Safari/.exec(ua);
+  if (macSafari && Number(macSafari[1]) >= 17) return 'mac-safari';
   return 'manual';
 }
 
 const DISMISS_KEY = 'pm.installBanner.dismissed';
-function readDismissed() {
+const INSTALLED_KEY = 'pm.installed';
+function readFlag(key: string) {
   try {
-    return localStorage.getItem(DISMISS_KEY) === '1';
+    return localStorage.getItem(key) === '1';
   } catch {
     return false;
   }
+}
+function writeFlag(key: string, on: boolean) {
+  try {
+    if (on) localStorage.setItem(key, '1');
+    else localStorage.removeItem(key);
+  } catch {}
 }
 
 class Install {
   /** Running as the installed app. */
   standalone = $state(isStandalone());
-  /** Installed during this visit. */
-  installed = $state(false);
+  /** Installed from this browser (remembered until the browser offers installing again). */
+  installed = $state(readFlag(INSTALLED_KEY));
   platform = $state<InstallPlatform>(detectPlatform());
   /** The overview's install banner was closed with "don't show again". */
-  bannerDismissed = $state(readDismissed());
+  bannerDismissed = $state(readFlag(DISMISS_KEY));
   private deferred: BeforeInstallPromptEvent | null = null;
 
   /** Show the banner only where installing is one tap or a known recipe. */
@@ -58,9 +71,12 @@ class Install {
 
   dismissBanner() {
     this.bannerDismissed = true;
-    try {
-      localStorage.setItem(DISMISS_KEY, '1');
-    } catch {}
+    writeFlag(DISMISS_KEY, true);
+  }
+
+  private markInstalled() {
+    this.installed = true;
+    writeFlag(INSTALLED_KEY, true);
   }
 
   constructor() {
@@ -69,13 +85,17 @@ class Install {
       e.preventDefault();
       this.deferred = e as BeforeInstallPromptEvent;
       this.platform = 'prompt';
+      // The browser offers installing only when the app is not installed (any more).
+      this.installed = false;
+      writeFlag(INSTALLED_KEY, false);
     });
     addEventListener('appinstalled', () => {
       this.deferred = null;
-      this.installed = true;
+      this.markInstalled();
       this.platform = detectPlatform();
     });
-    matchMedia('(display-mode: standalone)').addEventListener?.('change', () => (this.standalone = isStandalone()));
+    for (const q of ['(display-mode: standalone)', '(display-mode: window-controls-overlay)'])
+      matchMedia(q).addEventListener?.('change', () => (this.standalone = isStandalone()));
   }
 
   /** Shows the browser's install dialog. */
@@ -83,9 +103,13 @@ class Install {
     const e = this.deferred;
     if (!e) return;
     this.deferred = null;
-    await e.prompt();
-    const { outcome } = await e.userChoice;
-    if (outcome === 'accepted') this.installed = true;
+    try {
+      await e.prompt();
+      const { outcome } = await e.userChoice;
+      if (outcome === 'accepted') this.markInstalled();
+    } catch {
+      // The event can be used only once; fall back to the menu steps.
+    }
     this.platform = detectPlatform();
   }
 }
