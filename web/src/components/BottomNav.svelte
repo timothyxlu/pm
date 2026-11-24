@@ -8,11 +8,12 @@
   const newHref = $derived(router.route.name === 'project' ? `/new?project=${router.route.key}` : '/new');
 </script>
 
-<a class="fab" href={newHref} aria-label={t.newIssue}><Icon name="plus" size={26} /></a>
+{#if name !== 'settings'}<a class="fab" href={newHref} aria-label={t.newIssue}><Icon name="plus" size={26} /></a>{/if}
 <nav aria-label="Main">
   <a href="/" aria-current={name === 'home' || name === 'project' ? 'page' : undefined}><Icon name="grid" />{t.overview}</a>
   <a href="/active" aria-current={name === 'active' ? 'page' : undefined}><Icon name="bolt" />{t.active}</a>
   <a href="/search" aria-current={name === 'search' ? 'page' : undefined}><Icon name="search" />{t.search}</a>
+  <a href="/settings" aria-current={name === 'settings' ? 'page' : undefined}><Icon name="settings" />{t.settings}</a>
 </nav>
 
 <style>

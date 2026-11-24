@@ -1,28 +1,25 @@
 <script lang="ts">
   import InstallBanner from '../components/InstallBanner.svelte';
   import Icon from '../components/Icon.svelte';
-  import IssueLine from '../components/IssueLine.svelte';
-  import IssueRow from '../components/IssueRow.svelte';
-  import StatusIcon from '../components/StatusIcon.svelte';
   import { keys } from '../lib/keys.svelte';
   import { media } from '../lib/media.svelte';
   import ProjectForm from '../components/ProjectForm.svelte';
   import { fmtLongDate, i18n } from '../lib/i18n.svelte';
-  import { issueOrder, store } from '../lib/store.svelte';
+  import { OPEN, store } from '../lib/store.svelte';
 
   const t = $derived(i18n.t);
   let showArchived = $state(false);
   let creating = $state(false);
 
   const weekAgo = new Date(Date.now() - 7 * 86400_000).toISOString();
+  // Project-level numbers only; the issues themselves live on the Active tab.
   const stats = $derived({
     done: store.live.filter((i) => i.status === 'done' && i.completed_at && i.completed_at >= weekAgo).length,
-    inProgress: store.live.filter((i) => i.status === 'in_progress').length,
-    inReview: store.live.filter((i) => i.status === 'in_review').length,
+    projects: store.projectList.filter((p) => p.status === 'active').length,
+    open: store.live.filter((i) => OPEN.includes(i.status)).length,
   });
   const projects = $derived(store.projectList.filter((p) => showArchived || p.status !== 'archived'));
   const archivedCount = $derived(store.projectList.filter((p) => p.status === 'archived').length);
-  const working = $derived(store.live.filter((i) => i.status === 'in_progress').sort(issueOrder));
 </script>
 
 {#if media.desktop}
@@ -37,10 +34,9 @@
   <div class="dbody">
     <InstallBanner />
     <div class="dstats">
-      <div class="dstat"><span class="lbl">{t.doneThisWeek}</span><span class="n mono">{stats.done}</span></div>
-      <div class="dstat"><span class="lbl"><StatusIcon status="in_progress" size={13} />{t.inProgress}</span><span class="n mono">{stats.inProgress}</span></div>
-      <div class="dstat"><span class="lbl"><StatusIcon status="in_review" size={13} />{t.inReview}</span><span class="n mono">{stats.inReview}</span></div>
-      <div class="dstat"><span class="lbl">{t.projects}</span><span class="n mono">{store.projectList.filter((p) => p.status === 'active').length}</span></div>
+      <div class="dstat"><span class="lbl">{t.activeProjects}</span><span class="n mono">{stats.projects}</span></div>
+      <div class="dstat"><span class="lbl">{t.openIssues}</span><span class="n mono">{stats.open}</span></div>
+      <a class="dstat" href="/active"><span class="lbl">{t.doneThisWeek}</span><span class="n mono">{stats.done}</span></a>
     </div>
 
     <h2 class="dsection">
@@ -87,15 +83,6 @@
         {/each}
       </div>
     {/if}
-
-    {#if working.length}
-      <h2 class="dsection">{t.workingOn} <span class="n">{working.length}</span></h2>
-      <div class="dlist">
-        {#each working as issue (issue.id)}
-          <IssueLine {issue} showProject />
-        {/each}
-      </div>
-    {/if}
   </div>
 </div>
 {:else}
@@ -105,25 +92,15 @@
       <span class="date">{fmtLongDate(new Date())}</span>
       <h1>{t.overview}</h1>
     </div>
-    <a class="icon-btn" href="/settings" aria-label={t.settings}><Icon name="settings" /></a>
   </header>
 
   <InstallBanner />
 
   <div class="mstats card">
-    <div><span class="n mono">{stats.done}</span><span>{t.doneThisWeek}</span></div>
-    <a href="/active"><span class="n mono">{stats.inProgress}</span><span><StatusIcon status="in_progress" size={11} />{t.inProgress}</span></a>
-    <a href="/active"><span class="n mono">{stats.inReview}</span><span><StatusIcon status="in_review" size={11} />{t.inReview}</span></a>
+    <div><span class="n mono">{stats.projects}</span><span>{t.activeProjects}</span></div>
+    <div><span class="n mono">{stats.open}</span><span>{t.openIssues}</span></div>
+    <a href="/active"><span class="n mono">{stats.done}</span><span>{t.doneThisWeek}</span></a>
   </div>
-
-  {#if working.length}
-    <h2 class="section-title">{t.workingOn} · {working.length}</h2>
-    <div class="list">
-      {#each working as issue (issue.id)}
-        <IssueRow {issue} />
-      {/each}
-    </div>
-  {/if}
 
   <div class="sec-row">
     <h2 class="section-title">{t.projects}</h2>
@@ -274,7 +251,7 @@
   }
   .dstats {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, 1fr);
     gap: 12px;
   }
   .dstat {
@@ -285,6 +262,12 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
+  }
+  a.dstat {
+    color: inherit;
+  }
+  a.dstat:hover {
+    border-color: var(--line-strong, var(--faint));
   }
   .dstat .lbl {
     font-size: 12.5px;

@@ -4,7 +4,6 @@
   import { fmtAgo, i18n, type LangPref } from '../lib/i18n.svelte';
   import { media } from '../lib/media.svelte';
   import { install } from '../lib/pwa.svelte';
-  import { router } from '../lib/router.svelte';
   import { store } from '../lib/store.svelte';
   import { theme, type ThemePref } from '../lib/theme.svelte';
 
@@ -139,12 +138,10 @@
 </script>
 
 {#if media.desktop}<header class="dhead"><h1>{t.settings}</h1></header>{/if}
-<div class="page plain">
+<div class="page tab">
   {#if !media.desktop}
-    <header class="topbar">
-      <button class="icon-btn" onclick={() => router.back('/')} aria-label={t.back}><Icon name="back" /></button>
-      <h1>{t.settings}</h1>
-    </header>
+    <!-- A bottom tab like Overview, Active and Search: no back button. -->
+    <header class="topbar"><h1 class="pad">{t.settings}</h1></header>
   {/if}
 
   <section class="install">
@@ -292,6 +289,14 @@
 </div>
 
 <style>
+  /* Room for the tab bar, but no floating "+" button on this tab. */
+  .tab {
+    padding-bottom: calc(var(--nav-h) + var(--safe-b) + 32px);
+  }
+  .pad {
+    padding-left: 8px;
+    font-size: 28px !important;
+  }
   fieldset {
     border: 0;
     margin: 0;
